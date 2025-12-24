@@ -6,5 +6,3 @@
 //
 // It should NOT be imported by internal/app or internal/domain.
 package httpapi
-
-

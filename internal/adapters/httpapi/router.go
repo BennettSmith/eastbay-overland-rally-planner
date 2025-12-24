@@ -34,5 +34,3 @@ func NewRouter(ssi oas.StrictServerInterface) http.Handler {
 	_ = oas.HandlerFromMux(oas.NewStrictHandler(ssi, nil), r)
 	return r
 }
-
-

@@ -108,5 +108,3 @@ func (_ StrictUnimplemented) GetTripRSVPSummary(ctx context.Context, _ oas.GetTr
 	_ = ctx
 	return oas.GetTripRSVPSummary500JSONResponse{InternalErrorJSONResponse: oas.InternalErrorJSONResponse(notImplementedError())}, nil
 }
-
-

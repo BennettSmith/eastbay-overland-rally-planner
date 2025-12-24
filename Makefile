@@ -17,9 +17,10 @@
 
 SHELL := /bin/bash
 
-POSTGRES_USER ?= ebo
-POSTGRES_PASSWORD ?= ebo_password
-POSTGRES_DB ?= ebo_dev
+# Keep these defaults aligned with docker-compose.yml (so "make up" works out of the box).
+POSTGRES_USER ?= eb
+POSTGRES_PASSWORD ?= eb
+POSTGRES_DB ?= eastbay
 POSTGRES_PORT ?= 5432
 
 COMPOSE ?= docker compose
@@ -46,6 +47,11 @@ help:
 	@echo "  db-migrate     Apply schema migrations (golang-migrate)"
 	@echo "  db-seed        Apply dev seed (optional)"
 	@echo "  db-reset       Drop + create + migrate + seed (destructive)"
+	@echo ""
+	@echo "  fmt            Run gofmt on all .go files"
+	@echo "  test           Run Go unit tests (./...)"
+	@echo "  cover          Run tests with coverage (writes coverage.out; prints summary)"
+	@echo "  cover-html     Generate coverage.html from coverage.out"
 	@echo ""
 	@echo "Vars (override like: make up POSTGRES_PORT=5433):"
 	@echo "  POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB POSTGRES_PORT SEED_FILE DATABASE_URL"
@@ -119,4 +125,31 @@ gen-openapi:
 		-package oas \
 		-o internal/adapters/httpapi/oas/api.gen.go \
 		openapi.yaml
+
+# --- Go quality-of-life targets (Milestone 0) ---
+
+GO ?= go
+PKGS ?= ./...
+
+COVERPROFILE ?= coverage.out
+COVERHTML ?= coverage.html
+
+.PHONY: fmt
+fmt:
+	@echo "gofmt..."
+	@gofmt -w $$(find . -name '*.go' -not -path './vendor/*')
+
+.PHONY: test
+test:
+	@$(GO) test $(PKGS)
+
+.PHONY: cover
+cover:
+	@$(GO) test -coverprofile=$(COVERPROFILE) $(PKGS)
+	@$(GO) tool cover -func=$(COVERPROFILE)
+
+.PHONY: cover-html
+cover-html: cover
+	@$(GO) tool cover -html=$(COVERPROFILE) -o $(COVERHTML)
+	@echo "Wrote $(COVERHTML)"
 

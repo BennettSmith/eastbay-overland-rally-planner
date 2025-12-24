@@ -89,11 +89,11 @@ Acceptance criteria:
 
 ### Milestone 0 — Baseline dev ergonomics (fast feedback loop)
 
-- [ ] Add `make test` target (`go test ./...`)
-- [ ] Add `make cover` target (prints coverage summary; optionally writes `coverage.out`)
-- [ ] Add `make fmt` target (`gofmt` + `goimports` if adopted)
-- [ ] Document the local dev loop in `README.md` (how to run, test, regenerate OpenAPI)
-- [ ] Add `.env.example` documenting required runtime config (including `JWT_ISSUER`, `JWT_AUDIENCE`, `JWT_JWKS_URL`)
+- [x] Add `make test` target (`go test ./...`)
+- [x] Add `make cover` target (prints coverage summary; optionally writes `coverage.out`)
+- [x] Add `make fmt` target (`gofmt` + `goimports` if adopted)
+- [x] Document the local dev loop in `README.md` (how to run, test, regenerate OpenAPI)
+- [x] Add `.env.example` documenting required runtime config (including `JWT_ISSUER`, `JWT_AUDIENCE`, `JWT_JWKS_URL`)
 
 Acceptance criteria:
 - A new contributor can run: `make gen-openapi && make test && make cover`.
@@ -315,10 +315,8 @@ We want JWT verification tests to be **fully local** and **deterministic** (no c
 
 ## Coverage reporting
 
-- [ ] `make cover` prints a readable summary (and optionally writes `coverage.out`)
-- [ ] Optional: `make cover-html` to generate/report a browsable HTML report
+- [x] `make cover` prints a readable summary (and optionally writes `coverage.out`)
+- [x] Optional: `make cover-html` to generate/report a browsable HTML report
 
 Acceptance criteria:
 - Coverage is easy to inspect locally and in CI logs (even without gating).
-
-

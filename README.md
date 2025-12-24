@@ -19,11 +19,40 @@ Bring up the database and API (and the local proxy):
 docker compose up -d --build db api caddy
 ```
 
+Or, use the repo `Makefile` helpers (recommended):
+
+```bash
+make up
+make db-migrate
+```
+
 Database connection string (from host):
 
 ```bash
 postgres://eb:eb@localhost:5432/eastbay?sslmode=disable
 ```
+
+## Fast dev loop (spec-first)
+
+OpenAPI is the source of truth (`openapi.yaml`). Regenerate server glue, format, and run tests:
+
+```bash
+make gen-openapi
+make fmt
+make test
+make cover
+```
+
+If you want an HTML coverage report:
+
+```bash
+make cover-html
+```
+
+## Environment variables
+
+- Copy `.env.example` to `.env` and adjust values as needed.
+- Auth variables (`JWT_ISSUER`, `JWT_AUDIENCE`, `JWT_JWKS_URL`) will become required once Milestone 1 is implemented.
 
 ## Run migrations
 
