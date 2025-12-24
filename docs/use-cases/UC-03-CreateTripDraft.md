@@ -1,27 +1,29 @@
 # UC-03 — CreateTripDraft
 
 ## Primary Actor
-Organizer
+Member (creator)
 
 ## Goal
-Create a new trip in DRAFT state. Incomplete data is allowed.
+Create a new trip in `DRAFT` state. Incomplete data is allowed.
 
 ## Preconditions
 - Caller is authenticated.
-- Target resource exists and is visible/accessible to the caller.
 
 ## Postconditions
-- System state is updated as described.
+- A new draft trip exists.
+- The caller is recorded as the trip creator (`created_by_member_id`) and is the initial organizer.
 
 ---
 
 ## Main Success Flow
-1. Actor invokes the use case with the required identifiers and inputs.
+1. Actor submits a create-draft request (optional partial trip fields).
 2. System authenticates the caller.
-3. System authorizes the caller for the target resource (trip/member).
-4. System loads the required aggregate(s) and validates inputs.
-5. System executes the primary behavior.
-6. System returns the result.
+3. System creates a new `Trip` with:
+   - `status = DRAFT`
+   - `draftVisibility = PRIVATE` (unless explicitly set to `PUBLIC`)
+   - `created_by_member_id = caller`
+4. System ensures the creator is included as an organizer (initial organizer).
+5. System returns the created trip identifiers/details.
 
 ---
 
@@ -32,9 +34,7 @@ Create a new trip in DRAFT state. Incomplete data is allowed.
 
 ## Error Conditions
 - `401 Unauthorized` — caller is not authenticated
-- `403 Forbidden` — caller lacks permission for this operation
-- `404 Not Found` — target resource does not exist
-- `409 Conflict` — domain invariant violated (e.g., capacity reached, missing publish fields, removing last organizer)
+- `409 Conflict` — domain invariant violated
 - `422 Unprocessable Entity` — invalid input values (format/range)
 - `500 Internal Server Error` — unexpected failure
 
@@ -42,17 +42,18 @@ Create a new trip in DRAFT state. Incomplete data is allowed.
 
 ## Authorization Rules
 - Caller must be an authenticated member.
-- Caller must be an organizer of the target trip.
+- Any authenticated member may create a new trip draft; the caller becomes the creator and initial organizer.
 
 ## Domain Invariants Enforced
-- Trip status is initialized to DRAFT.
-- draftVisibility defaults to PRIVATE unless explicitly set otherwise.
-- At least one organizer must always exist (creator becomes organizer).
+- Trip status is initialized to `DRAFT`.
+- `draftVisibility` defaults to `PRIVATE` unless explicitly set otherwise.
+- `created_by_member_id` is set to the caller and is immutable.
+- At least one organizer must exist; the creator becomes the initial organizer.
 
 ---
 
 ## Output
-- Success DTO or confirmation response (depending on operation)
+- Success DTO containing the created trip (at minimum the new `tripId`).
 
 ---
 

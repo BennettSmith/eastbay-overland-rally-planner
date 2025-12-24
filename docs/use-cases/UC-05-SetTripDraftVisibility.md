@@ -1,14 +1,14 @@
 # UC-05 — SetTripDraftVisibility
 
 ## Primary Actor
-Organizer
+Organizer (creator)
 
 ## Goal
 Toggle a draft between private and public visibility.
 
 ## Preconditions
 - Caller is authenticated.
-- Target resource exists and is visible/accessible to the caller.
+- Target draft trip exists and is visible to the caller.
 
 ## Postconditions
 - System state is updated as described.
@@ -16,12 +16,14 @@ Toggle a draft between private and public visibility.
 ---
 
 ## Main Success Flow
-1. Actor invokes the use case with the required identifiers and inputs.
+1. Actor submits a draft visibility change for a given `tripId` with `draftVisibility` in `{PRIVATE, PUBLIC}`.
 2. System authenticates the caller.
-3. System authorizes the caller for the target resource (trip/member).
-4. System loads the required aggregate(s) and validates inputs.
-5. System executes the primary behavior.
-6. System returns the result.
+3. System loads the trip by `tripId` and verifies `status = DRAFT`.
+4. System authorizes the caller:
+   - Caller must be the trip creator (`created_by_member_id`).
+   - If not visible/authorized, return `404 Not Found` (do not reveal existence).
+5. System updates `draftVisibility` to the requested value.
+6. System returns the updated trip details.
 
 ---
 
@@ -32,9 +34,8 @@ Toggle a draft between private and public visibility.
 
 ## Error Conditions
 - `401 Unauthorized` — caller is not authenticated
-- `403 Forbidden` — caller lacks permission for this operation
-- `404 Not Found` — target resource does not exist
-- `409 Conflict` — domain invariant violated (e.g., capacity reached, missing publish fields, removing last organizer)
+- `404 Not Found` — trip does not exist OR is not visible to the caller
+- `409 Conflict` — domain invariant violated
 - `422 Unprocessable Entity` — invalid input values (format/range)
 - `500 Internal Server Error` — unexpected failure
 
@@ -42,17 +43,18 @@ Toggle a draft between private and public visibility.
 
 ## Authorization Rules
 - Caller must be an authenticated member.
-- Caller must be an organizer of the target trip.
+- Only the trip creator (`created_by_member_id`) may change `draftVisibility`.
+- For non-visible drafts, return `404 Not Found` (do not reveal existence).
 
 ## Domain Invariants Enforced
 - Trip must be in DRAFT state.
-- Only organizers may change draft visibility.
+- Only the creator may change draft visibility.
 - draftVisibility must be one of PRIVATE or PUBLIC.
 
 ---
 
 ## Output
-- Success DTO or confirmation response (depending on operation)
+- Success DTO containing the updated trip.
 
 ---
 

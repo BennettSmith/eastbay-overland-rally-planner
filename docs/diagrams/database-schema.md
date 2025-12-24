@@ -1,6 +1,6 @@
 # Database Schema (v1) — Mermaid
 
-Source of truth: `migrations/000001_init.up.sql`
+Source of truth: `migrations/*.sql`
 
 ```mermaid
 erDiagram
@@ -35,6 +35,7 @@ erDiagram
   TRIPS {
     bigint id PK
     uuid external_id "unique"
+    bigint created_by_member_id FK
     text name
     text description
     date start_date
@@ -91,6 +92,8 @@ erDiagram
   }
 
   MEMBERS ||--|| MEMBER_VEHICLE_PROFILES : "has"
+
+  MEMBERS ||--o{ TRIPS : "creates"
 
   TRIPS ||--o{ TRIP_ORGANIZERS : "has"
   MEMBERS ||--o{ TRIP_ORGANIZERS : "organizes"
