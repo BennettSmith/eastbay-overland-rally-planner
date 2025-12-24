@@ -29,6 +29,10 @@ type Trip struct {
 
 	Status Status
 
+	// Core planning fields (nullable in v1 responses).
+	Name        *string
+	Description *string
+
 	CreatorMemberID domain.MemberID
 	OrganizerMemberIDs []domain.MemberID
 
@@ -36,6 +40,18 @@ type Trip struct {
 
 	// StartDate is used for sorting; nil means "unknown".
 	StartDate *time.Time
+	EndDate   *time.Time
+
+	CapacityRigs *int
+	// AttendingRigs is a read model field populated for published trips (later milestones).
+	AttendingRigs *int
+
+	DifficultyText              *string
+	MeetingLocation             *domain.Location
+	CommsRequirementsText       *string
+	RecommendedRequirementsText *string
+
+	Artifacts []domain.TripArtifact
 
 	CreatedAt time.Time
 	UpdatedAt time.Time

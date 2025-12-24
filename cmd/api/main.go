@@ -12,7 +12,9 @@ import (
 	"eastbay-overland-rally-planner/internal/adapters/httpapi"
 	memidempotency "eastbay-overland-rally-planner/internal/adapters/memory/idempotency"
 	memmemberrepo "eastbay-overland-rally-planner/internal/adapters/memory/memberrepo"
+	memtriprepo "eastbay-overland-rally-planner/internal/adapters/memory/triprepo"
 	"eastbay-overland-rally-planner/internal/app/members"
+	"eastbay-overland-rally-planner/internal/app/trips"
 	"eastbay-overland-rally-planner/internal/platform/auth/jwtverifier"
 	platformclock "eastbay-overland-rally-planner/internal/platform/clock"
 	"eastbay-overland-rally-planner/internal/platform/config"
@@ -31,11 +33,13 @@ func main() {
 	// In-memory dependencies (Milestone 3). We'll swap these to Postgres adapters later.
 	clk := platformclock.NewSystemClock()
 	memberRepo := memmemberrepo.NewRepo()
+	tripRepo := memtriprepo.NewRepo()
 	idemStore := memidempotency.NewStore()
 	memberSvc := members.NewService(memberRepo, clk)
+	tripSvc := trips.NewService(tripRepo, memberRepo)
 
 	// Real server implementation for Members; other endpoints remain strict-unimplemented.
-	api := httpapi.NewServer(memberSvc, idemStore)
+	api := httpapi.NewServer(memberSvc, tripSvc, idemStore)
 
 	handler := httpapi.NewRouterWithOptions(
 		api,

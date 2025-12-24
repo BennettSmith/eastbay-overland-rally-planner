@@ -4,6 +4,7 @@ import (
 	"context"
 	"sort"
 	"sync"
+	"time"
 
 	"eastbay-overland-rally-planner/internal/domain"
 	"eastbay-overland-rally-planner/internal/ports/out/triprepo"
@@ -94,11 +95,64 @@ func cloneTrip(t triprepo.Trip) triprepo.Trip {
 	if t.OrganizerMemberIDs != nil {
 		cp.OrganizerMemberIDs = append([]domain.MemberID(nil), t.OrganizerMemberIDs...)
 	}
+	cp.Name = cloneStringPtr(t.Name)
+	cp.Description = cloneStringPtr(t.Description)
+	cp.EndDate = cloneTimePtr(t.EndDate)
+	cp.CapacityRigs = cloneIntPtr(t.CapacityRigs)
+	cp.AttendingRigs = cloneIntPtr(t.AttendingRigs)
+	cp.DifficultyText = cloneStringPtr(t.DifficultyText)
+	cp.CommsRequirementsText = cloneStringPtr(t.CommsRequirementsText)
+	cp.RecommendedRequirementsText = cloneStringPtr(t.RecommendedRequirementsText)
+	cp.MeetingLocation = cloneLocation(t.MeetingLocation)
+	if t.Artifacts != nil {
+		cp.Artifacts = append([]domain.TripArtifact(nil), t.Artifacts...)
+	}
 	if t.StartDate != nil {
 		sd := *t.StartDate
 		cp.StartDate = &sd
 	}
 	return cp
+}
+
+func cloneStringPtr(p *string) *string {
+	if p == nil {
+		return nil
+	}
+	v := *p
+	return &v
+}
+
+func cloneIntPtr(p *int) *int {
+	if p == nil {
+		return nil
+	}
+	v := *p
+	return &v
+}
+
+func cloneTimePtr(p *time.Time) *time.Time {
+	if p == nil {
+		return nil
+	}
+	v := *p
+	return &v
+}
+
+func cloneLocation(l *domain.Location) *domain.Location {
+	if l == nil {
+		return nil
+	}
+	cp := *l
+	cp.Address = cloneStringPtr(l.Address)
+	if l.Latitude != nil {
+		v := *l.Latitude
+		cp.Latitude = &v
+	}
+	if l.Longitude != nil {
+		v := *l.Longitude
+		cp.Longitude = &v
+	}
+	return &cp
 }
 
 func isDraftVisibleTo(t triprepo.Trip, caller domain.MemberID) bool {

@@ -197,10 +197,10 @@ Acceptance criteria:
 - `GET /trips/drafts`
 - `GET /trips/{tripId}`
 
-- [ ] Define domain model for `Trip` read projection(s): summary vs details
-- [ ] Implement visibility rules (published/canceled visible; drafts visible per rules)
-- [ ] Implement app services + in-memory repos to support read queries
-- [ ] Implement HTTP handlers + tests
+- [x] Define domain model for `Trip` read projection(s): summary vs details
+- [x] Implement visibility rules (published/canceled visible; drafts visible per rules)
+- [x] Implement app services + in-memory repos to support read queries
+- [x] Implement HTTP handlers + tests
 
 Acceptance criteria:
 - Returned JSON matches OpenAPI schemas (`TripSummary`, `TripDetails`, etc.).

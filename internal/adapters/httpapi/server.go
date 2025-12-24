@@ -16,6 +16,7 @@ import (
 
 	"eastbay-overland-rally-planner/internal/adapters/httpapi/oas"
 	"eastbay-overland-rally-planner/internal/app/members"
+	"eastbay-overland-rally-planner/internal/app/trips"
 	"eastbay-overland-rally-planner/internal/domain"
 	"eastbay-overland-rally-planner/internal/ports/out/idempotency"
 )
@@ -26,12 +27,14 @@ type Server struct {
 	StrictUnimplemented
 
 	Members *members.Service
+	Trips   *trips.Service
 	Idem    idempotency.Store
 }
 
-func NewServer(membersSvc *members.Service, idem idempotency.Store) *Server {
+func NewServer(membersSvc *members.Service, tripsSvc *trips.Service, idem idempotency.Store) *Server {
 	return &Server{
 		Members: membersSvc,
+		Trips:   tripsSvc,
 		Idem:    idem,
 	}
 }
@@ -266,6 +269,96 @@ func (s *Server) UpdateMyMemberProfile(ctx context.Context, req oas.UpdateMyMemb
 	return oas.UpdateMyMemberProfile200JSONResponse(resp), nil
 }
 
+func (s *Server) ListVisibleTripsForMember(ctx context.Context, _ oas.ListVisibleTripsForMemberRequestObject) (oas.ListVisibleTripsForMemberResponseObject, error) {
+	sub, ok := SubjectFromContext(ctx)
+	if !ok {
+		return oas.ListVisibleTripsForMember401JSONResponse{UnauthorizedJSONResponse: oas.UnauthorizedJSONResponse(oasError(ctx, "UNAUTHORIZED", "missing subject", nil))}, nil
+	}
+	me, err := s.Members.GetMyMemberProfile(ctx, domain.SubjectID(sub))
+	if err != nil {
+		if isMemberNotProvisioned(err) {
+			return oas.ListVisibleTripsForMember401JSONResponse{UnauthorizedJSONResponse: oas.UnauthorizedJSONResponse(oasError(ctx, "MEMBER_NOT_PROVISIONED", "No member profile exists for the authenticated subject.", nil))}, nil
+		}
+		return nil, err
+	}
+
+	ts, err := s.Trips.ListVisibleTripsForMember(ctx, me.ID)
+	if err != nil {
+		if ae := (*trips.Error)(nil); errors.As(err, &ae) {
+			switch ae.Status {
+			default:
+				return nil, err
+			}
+		}
+		return nil, err
+	}
+
+	out := make([]oas.TripSummary, 0, len(ts))
+	for _, t := range ts {
+		out = append(out, tripSummaryFromDomain(t))
+	}
+	return oas.ListVisibleTripsForMember200JSONResponse{Trips: out}, nil
+}
+
+func (s *Server) ListMyDraftTrips(ctx context.Context, _ oas.ListMyDraftTripsRequestObject) (oas.ListMyDraftTripsResponseObject, error) {
+	sub, ok := SubjectFromContext(ctx)
+	if !ok {
+		return oas.ListMyDraftTrips401JSONResponse{UnauthorizedJSONResponse: oas.UnauthorizedJSONResponse(oasError(ctx, "UNAUTHORIZED", "missing subject", nil))}, nil
+	}
+	me, err := s.Members.GetMyMemberProfile(ctx, domain.SubjectID(sub))
+	if err != nil {
+		if isMemberNotProvisioned(err) {
+			return oas.ListMyDraftTrips401JSONResponse{UnauthorizedJSONResponse: oas.UnauthorizedJSONResponse(oasError(ctx, "MEMBER_NOT_PROVISIONED", "No member profile exists for the authenticated subject.", nil))}, nil
+		}
+		return nil, err
+	}
+
+	ts, err := s.Trips.ListMyDraftTrips(ctx, me.ID)
+	if err != nil {
+		if ae := (*trips.Error)(nil); errors.As(err, &ae) {
+			switch ae.Status {
+			default:
+				return nil, err
+			}
+		}
+		return nil, err
+	}
+
+	out := make([]oas.TripSummary, 0, len(ts))
+	for _, t := range ts {
+		out = append(out, tripSummaryFromDomain(t))
+	}
+	return oas.ListMyDraftTrips200JSONResponse{Trips: out}, nil
+}
+
+func (s *Server) GetTripDetails(ctx context.Context, req oas.GetTripDetailsRequestObject) (oas.GetTripDetailsResponseObject, error) {
+	sub, ok := SubjectFromContext(ctx)
+	if !ok {
+		return oas.GetTripDetails401JSONResponse{UnauthorizedJSONResponse: oas.UnauthorizedJSONResponse(oasError(ctx, "UNAUTHORIZED", "missing subject", nil))}, nil
+	}
+	me, err := s.Members.GetMyMemberProfile(ctx, domain.SubjectID(sub))
+	if err != nil {
+		if isMemberNotProvisioned(err) {
+			return oas.GetTripDetails401JSONResponse{UnauthorizedJSONResponse: oas.UnauthorizedJSONResponse(oasError(ctx, "MEMBER_NOT_PROVISIONED", "No member profile exists for the authenticated subject.", nil))}, nil
+		}
+		return nil, err
+	}
+
+	td, err := s.Trips.GetTripDetails(ctx, me.ID, domain.TripID(req.TripId))
+	if err != nil {
+		if ae := (*trips.Error)(nil); errors.As(err, &ae) {
+			switch ae.Status {
+			case http.StatusNotFound:
+				return oas.GetTripDetails404JSONResponse{NotFoundJSONResponse: oas.NotFoundJSONResponse(oasError(ctx, ae.Code, ae.Message, ae.Details))}, nil
+			default:
+				return nil, err
+			}
+		}
+		return nil, err
+	}
+	return oas.GetTripDetails200JSONResponse{Trip: tripDetailsFromDomain(td)}, nil
+}
+
 func isMemberNotProvisioned(err error) bool {
 	ae := (*members.Error)(nil)
 	if errors.As(err, &ae) {
@@ -285,6 +378,126 @@ func oasError(ctx context.Context, code string, message string, details map[stri
 		er.Error.RequestId = nullable.NewNullableWithValue(rid)
 	}
 	return er
+}
+
+func tripSummaryFromDomain(t domain.TripSummary) oas.TripSummary {
+	out := oas.TripSummary{
+		TripId: string(t.ID),
+		Status: oas.TripStatus(t.Status),
+	}
+	out.Name = nullableString(t.Name)
+	out.StartDate = nullableDate(t.StartDate)
+	out.EndDate = nullableDate(t.EndDate)
+	out.CapacityRigs = nullableInt(t.CapacityRigs)
+	out.AttendingRigs = nullableInt(t.AttendingRigs)
+	if t.DraftVisibility != nil {
+		dv := oas.DraftVisibility(*t.DraftVisibility)
+		out.DraftVisibility = &dv
+	}
+	return out
+}
+
+func tripDetailsFromDomain(t domain.TripDetails) oas.TripDetails {
+	out := oas.TripDetails{
+		TripId:             string(t.ID),
+		Status:             oas.TripStatus(t.Status),
+		Organizers:         make([]oas.MemberSummary, 0, len(t.Organizers)),
+		Artifacts:          make([]oas.TripArtifact, 0, len(t.Artifacts)),
+		RsvpActionsEnabled: t.RSVPActionsEnabled,
+	}
+
+	out.Name = nullableString(t.Name)
+	out.Description = nullableString(t.Description)
+	out.StartDate = nullableDate(t.StartDate)
+	out.EndDate = nullableDate(t.EndDate)
+	out.CapacityRigs = nullableInt(t.CapacityRigs)
+	out.DifficultyText = nullableString(t.DifficultyText)
+	out.CommsRequirementsText = nullableString(t.CommsRequirementsText)
+	out.RecommendedRequirementsText = nullableString(t.RecommendedRequirementsText)
+	if t.DraftVisibility != nil {
+		dv := oas.DraftVisibility(*t.DraftVisibility)
+		out.DraftVisibility = &dv
+	}
+
+	if t.MeetingLocation != nil {
+		out.MeetingLocation = locationFromDomain(*t.MeetingLocation)
+	}
+
+	for _, m := range t.Organizers {
+		out.Organizers = append(out.Organizers, memberSummaryFromDomain(m))
+	}
+	for _, a := range t.Artifacts {
+		out.Artifacts = append(out.Artifacts, tripArtifactFromDomain(a))
+	}
+
+	// RSVP fields are introduced in later milestones; omit for now.
+	out.RsvpSummary = nil
+	out.MyRsvp = nil
+
+	return out
+}
+
+func memberSummaryFromDomain(m domain.MemberSummary) oas.MemberSummary {
+	out := oas.MemberSummary{
+		MemberId:    string(m.ID),
+		DisplayName: m.DisplayName,
+		Email:       openapi_types.Email(m.Email),
+	}
+	if m.GroupAliasEmail != nil {
+		out.GroupAliasEmail = nullable.NewNullableWithValue(openapi_types.Email(*m.GroupAliasEmail))
+	}
+	return out
+}
+
+func tripArtifactFromDomain(a domain.TripArtifact) oas.TripArtifact {
+	return oas.TripArtifact{
+		ArtifactId: a.ArtifactID,
+		Type:       oas.ArtifactType(a.Type),
+		Title:      a.Title,
+		Url:        a.URL,
+	}
+}
+
+func locationFromDomain(l domain.Location) *oas.Location {
+	out := &oas.Location{Label: l.Label}
+	if l.Address != nil {
+		out.Address = nullable.NewNullableWithValue(*l.Address)
+	}
+	if l.Latitude != nil || l.Longitude != nil {
+		ll := struct {
+			Latitude  *float64 `json:"latitude,omitempty"`
+			Longitude *float64 `json:"longitude,omitempty"`
+		}{
+			Latitude:  l.Latitude,
+			Longitude: l.Longitude,
+		}
+		out.LatitudeLongitude = nullable.NewNullableWithValue(ll)
+	}
+	return out
+}
+
+func nullableString(p *string) nullable.Nullable[string] {
+	var out nullable.Nullable[string]
+	if p != nil {
+		out.Set(*p)
+	}
+	return out
+}
+
+func nullableInt(p *int) nullable.Nullable[int] {
+	var out nullable.Nullable[int]
+	if p != nil {
+		out.Set(*p)
+	}
+	return out
+}
+
+func nullableDate(p *time.Time) nullable.Nullable[openapi_types.Date] {
+	var out nullable.Nullable[openapi_types.Date]
+	if p != nil {
+		out.Set(openapi_types.Date{Time: p.UTC()})
+	}
+	return out
 }
 
 func memberProfileFromDomain(m domain.Member) oas.MemberProfile {
