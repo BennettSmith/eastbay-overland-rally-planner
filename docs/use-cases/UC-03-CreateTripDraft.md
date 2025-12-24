@@ -18,7 +18,10 @@ Create a new trip in `DRAFT` state. Incomplete data is allowed.
 ## Main Success Flow
 1. Actor submits a create-draft request with the required title (`name`).
 2. System authenticates the caller.
-3. System validates inputs (title must be present and non-blank).
+3. System normalizes and validates the title:
+   - Trim leading/trailing whitespace.
+   - Collapse runs of whitespace to a single space.
+   - Require the resulting title to be non-empty.
 4. System creates a new `Trip` with:
    - `status = DRAFT`
    - `draftVisibility = PRIVATE` (always)
@@ -30,7 +33,7 @@ Create a new trip in `DRAFT` state. Incomplete data is allowed.
 
 ## Alternate Flows
 A1 — Idempotent Retry (Same Idempotency Key, Same Request)
-- **Condition:** A previous successful create request exists for the same actor and idempotency key with an identical request payload.
+- **Condition:** A previous successful create request exists for the same actor and idempotency key with an identical request payload (after applying the same title normalization rules).
 - **Behavior:** System returns the previously created trip (no new trip is created).
 - **Outcome:** Trip returned (idempotent).
 
