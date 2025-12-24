@@ -336,6 +336,12 @@ BEGIN
         USING ERRCODE = '23514';
     END IF;
 
+    -- Only PUBLIC drafts are publishable (v1).
+    IF OLD.draft_visibility <> 'PUBLIC' THEN
+      RAISE EXCEPTION 'Trip can only be published when draft_visibility = PUBLIC (was %)', OLD.draft_visibility
+        USING ERRCODE = '23514';
+    END IF;
+
     -- Required fields
     IF NEW.name IS NULL OR btrim(NEW.name) = '' THEN
       RAISE EXCEPTION 'Trip name is required to publish' USING ERRCODE = '23514';

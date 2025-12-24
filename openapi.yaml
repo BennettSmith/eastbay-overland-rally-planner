@@ -202,18 +202,15 @@ paths:
       operationId: publishTrip
       parameters:
       - $ref: '#/components/parameters/TripId'
-      - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '200':
           description: Trip published (or already published)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TripResponse'
+                $ref: '#/components/schemas/PublishTripResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -1026,6 +1023,18 @@ components:
           $ref: '#/components/schemas/TripDetails'
       required:
       - trip
+    PublishTripResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        trip:
+          $ref: '#/components/schemas/TripDetails'
+        announcementCopy:
+          type: string
+          description: Prepared announcement copy text for manual posting to the Google Group.
+      required:
+      - trip
+      - announcementCopy
     SetDraftVisibilityRequest:
       type: object
       additionalProperties: false
