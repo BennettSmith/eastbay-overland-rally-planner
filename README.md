@@ -26,6 +26,83 @@ make up
 make db-migrate
 ```
 
+### Developer flows (Docker Desktop)
+
+Common compose-based workflows:
+
+- **Start everything (db + migrate + api + caddy)**:
+
+```bash
+make up
+```
+
+- **Local dev auth**: this compose setup runs the API with `AUTH_MODE=dev`, which means:
+  - Requests authenticate via `X-Debug-Subject: <some-subject>`
+  - The API still enforces “member must be provisioned” for many endpoints, so you’ll typically create a member first.
+
+- **If you get “port 5432 is already allocated”** (another Postgres is already using it):
+
+```bash
+make up POSTGRES_PORT=5433
+```
+
+- **Check status / ports**:
+
+```bash
+make ps
+```
+
+- **Tail logs**:
+
+```bash
+make logs-api   # API only
+make logs-all   # everything
+```
+
+- **Rebuild only the API image (compose)**:
+
+```bash
+make rebuild-api
+make up
+```
+
+- **Reset the Postgres volume (destructive; wipes all local data)**:
+
+```bash
+make reset-volumes
+make up
+```
+
+Optional: build/run the API image without compose (useful for validating the container itself):
+
+```bash
+make image
+make image-run DATABASE_URL='postgres://eb:eb@host.docker.internal:5432/eastbay?sslmode=disable'
+```
+
+### Quick curl checks
+
+- **API health (through Caddy)**:
+
+```bash
+curl -i http://localhost:8081/healthz
+```
+
+- **Create a member (first-time setup for a subject)**:
+
+```bash
+curl -sS -X POST http://localhost:8081/members \
+  -H 'Content-Type: application/json' \
+  -H 'X-Debug-Subject: dev|alice' \
+  -d '{"displayName":"Alice","email":"alice@example.com"}'
+```
+
+- **List members**:
+
+```bash
+curl -sS http://localhost:8081/members -H 'X-Debug-Subject: dev|alice'
+```
+
 Database connection string (from host):
 
 ```bash

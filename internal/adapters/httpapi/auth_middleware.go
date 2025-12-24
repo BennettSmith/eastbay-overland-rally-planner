@@ -46,4 +46,34 @@ func NewAuthMiddleware(v *jwtverifier.Verifier) func(http.Handler) http.Handler 
 	}
 }
 
+// NewDevAuthMiddleware is a local/dev-only auth shim.
+//
+// It accepts an explicit subject via X-Debug-Subject and stores it in request context.
+// If the header is absent, it falls back to defaultSubject (if provided).
+//
+// This is intended for local Docker workflows where standing up an OIDC provider + JWKS
+// is overkill. Do NOT use this in production deployments.
+func NewDevAuthMiddleware(defaultSubject string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Health endpoint is deliberately out-of-spec and unauthenticated.
+			if r.URL.Path == "/healthz" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			sub := strings.TrimSpace(r.Header.Get("X-Debug-Subject"))
+			if sub == "" {
+				sub = strings.TrimSpace(defaultSubject)
+			}
+			if sub == "" {
+				writeOASError(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "missing subject (set X-Debug-Subject)", nil)
+				return
+			}
+
+			next.ServeHTTP(w, r.WithContext(WithSubject(r.Context(), sub)))
+		})
+	}
+}
+
 

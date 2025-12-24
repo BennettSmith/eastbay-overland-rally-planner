@@ -33,12 +33,25 @@ import (
 func main() {
 	port := getenv("PORT", "8080")
 
-	jwtCfg, err := config.LoadJWTConfigFromEnv()
-	if err != nil {
-		log.Fatalf("invalid auth config: %v", err)
+	// Auth configuration:
+	// - Production: require JWT_* env vars and enforce bearer auth
+	// - Local dev: set AUTH_MODE=dev to bypass JWT verification and use X-Debug-Subject
+	authMode := getenv("AUTH_MODE", "jwt")
+	var authMW func(http.Handler) http.Handler
+	authIssuer := ""
+	switch authMode {
+	case "dev":
+		authMW = httpapi.NewDevAuthMiddleware(getenv("DEV_SUBJECT", "dev|local"))
+		authIssuer = getenv("DEV_ISSUER", "dev")
+	default:
+		jwtCfg, err := config.LoadJWTConfigFromEnv()
+		if err != nil {
+			log.Fatalf("invalid auth config: %v", err)
+		}
+		verifier := jwtverifier.New(jwtCfg)
+		authMW = httpapi.NewAuthMiddleware(verifier)
+		authIssuer = jwtCfg.Issuer
 	}
-	verifier := jwtverifier.New(jwtCfg)
-	authMW := httpapi.NewAuthMiddleware(verifier)
 
 	clk := platformclock.NewSystemClock()
 
@@ -60,10 +73,10 @@ func main() {
 		}
 		cleanup = pool.Close
 
-		memberRepo = pgmemberrepo.NewRepo(pool, jwtCfg.Issuer)
+		memberRepo = pgmemberrepo.NewRepo(pool, authIssuer)
 		tripRepo = pgtriprepo.NewRepo(pool)
 		rsvpRepo = pgrsvprepo.NewRepo(pool)
-		idemStore = pgidempotency.NewStore(pool, jwtCfg.Issuer)
+		idemStore = pgidempotency.NewStore(pool, authIssuer)
 	default:
 		memberRepo = memmemberrepo.NewRepo()
 		tripRepo = memtriprepo.NewRepo()

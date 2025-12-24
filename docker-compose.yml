@@ -11,11 +11,11 @@ services:
   db:
     image: postgres:16
     environment:
-      POSTGRES_USER: eb
-      POSTGRES_PASSWORD: eb
-      POSTGRES_DB: eastbay
+      POSTGRES_USER: ${POSTGRES_USER:-eb}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-eb}
+      POSTGRES_DB: ${POSTGRES_DB:-eastbay}
     ports:
-      - "5432:5432" # optional; remove if you don't want host access
+      - "${POSTGRES_PORT:-5432}:5432" # optional; remove if you don't want host access
     volumes:
       - dbdata:/var/lib/postgresql/data
     healthcheck:
@@ -45,14 +45,17 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
       DATABASE_URL: postgres://eb:eb@db:5432/eastbay?sslmode=disable
+      STORAGE_BACKEND: postgres
       PORT: "8080"
       TRUST_PROXY_HEADERS: "true"
       PUBLIC_BASE_URL: http://localhost:8081
-      # Auth placeholders
-      OIDC_ISSUER: http://localhost:5556
-      JWT_AUDIENCE: east-bay-overland
+      # Local dev auth (bypass JWT verification; use X-Debug-Subject)
+      AUTH_MODE: dev
+      DEV_SUBJECT: dev|local
     expose:
       - "8080"
 
