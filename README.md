@@ -6,7 +6,12 @@ This repo uses:
 - **golang-migrate** via the `migrate/migrate` image (`migrate` service)
 - A Go API (`api` service) behind Caddy locally (`caddy` service)
 
-### Local dev (DB + API)
+## Diagrams
+
+- **Domain model (v1)**: `docs/diagrams/domain-model.md`
+- **Database schema (v1)**: `docs/diagrams/database-schema.md`
+
+## Local dev (DB + API)
 
 Bring up the database and API (and the local proxy):
 
@@ -20,7 +25,7 @@ Database connection string (from host):
 postgres://eb:eb@localhost:5432/eastbay?sslmode=disable
 ```
 
-### Run migrations
+## Run migrations
 
 Apply migrations (defaults to `up`):
 
@@ -35,7 +40,7 @@ docker compose run --rm migrate down -all
 docker compose run --rm migrate
 ```
 
-### Optional: dev seed (NOT part of migrations)
+## Optional: dev seed (NOT part of migrations)
 
 Seed data lives in `db/seed/seed_dev_optional.sql` and is intentionally **not** included in `migrations/`.
 
