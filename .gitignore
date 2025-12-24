@@ -1,0 +1,65 @@
+# =========================
+# Go / build artifacts
+# =========================
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Common build output dirs (if/when they exist)
+bin/
+dist/
+build/
+out/
+
+# Go tooling / deps
+# (Remove this if you intentionally commit vendored deps.)
+vendor/
+
+# =========================
+# Tests / coverage
+# =========================
+coverage.out
+coverage*.out
+*.coverprofile
+*.prof
+
+# =========================
+# Logs / runtime files
+# =========================
+*.log
+*.pid
+
+# =========================
+# Local env / secrets (do not commit)
+# =========================
+.env
+.env.*
+!.env.example
+
+# Keep these out of git unless you *explicitly* intend to commit them.
+*.pem
+*.key
+*.p12
+*.pfx
+
+# =========================
+# OS / editor junk
+# =========================
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+.idea/
+.vscode/
+
+
