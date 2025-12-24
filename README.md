@@ -51,8 +51,15 @@ make cover-html
 
 ## Environment variables
 
-- Copy `.env.example` to `.env` and adjust values as needed.
-- Auth variables (`JWT_ISSUER`, `JWT_AUDIENCE`, `JWT_JWKS_URL`) will become required once Milestone 1 is implemented.
+- **Auth (required)**:
+  - `JWT_ISSUER`
+  - `JWT_AUDIENCE`
+  - `JWT_JWKS_URL`
+- **Storage backend**:
+  - `STORAGE_BACKEND`: `memory` (default) or `postgres`
+  - `DATABASE_URL`: required when `STORAGE_BACKEND=postgres`
+- **Postgres contract tests (optional)**:
+  - `PG_DSN`: if set, Postgres adapter contract tests will run (they reset the `public` schema; use a disposable database).
 
 ## Run migrations
 

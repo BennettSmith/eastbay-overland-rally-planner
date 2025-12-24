@@ -23,7 +23,7 @@ func TestManualClock_NowSetAdd(t *testing.T) {
 	}
 
 	c.Add(5 * time.Second)
-	if got := c.Now(); !got.Equal(next.Add(5*time.Second)) {
+	if got := c.Now(); !got.Equal(next.Add(5 * time.Second)) {
 		t.Fatalf("Now() after Add()=%v, want %v", got, next.Add(5*time.Second))
 	}
 }
@@ -43,5 +43,3 @@ func TestManualClock_ConcurrentNow(t *testing.T) {
 	}
 	wg.Wait()
 }
-
-

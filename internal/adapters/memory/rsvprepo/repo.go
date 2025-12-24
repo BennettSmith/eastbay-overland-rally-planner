@@ -78,5 +78,3 @@ func (r *Repo) CountYesByTrip(ctx context.Context, tripID domain.TripID) (int, e
 	}
 	return n, nil
 }
-
-

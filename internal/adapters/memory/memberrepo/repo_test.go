@@ -185,5 +185,3 @@ func TestRepo_SearchActiveByDisplayName_RespectsLimit(t *testing.T) {
 		t.Fatalf("len=%d, want 1", len(got))
 	}
 }
-
-

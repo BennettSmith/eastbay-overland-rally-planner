@@ -15,8 +15,8 @@ import (
 type Repo struct {
 	mu sync.RWMutex
 
-	byID      map[domain.MemberID]memberrepo.Member
-	idBySub   map[domain.SubjectID]domain.MemberID
+	byID    map[domain.MemberID]memberrepo.Member
+	idBySub map[domain.SubjectID]domain.MemberID
 }
 
 func NewRepo() *Repo {
@@ -197,5 +197,3 @@ func matchesAllTokens(displayName string, tokens []string) bool {
 	}
 	return true
 }
-
-

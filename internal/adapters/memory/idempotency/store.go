@@ -35,5 +35,3 @@ func (s *Store) Put(ctx context.Context, fp idempotency.Fingerprint, rec idempot
 	s.m[fp] = rec
 	return nil
 }
-
-

@@ -58,5 +58,3 @@ func TestRepo_GetUpsertCountYesList(t *testing.T) {
 		t.Fatalf("ListByTrip() order=%v, want [m1 m2]", []domain.MemberID{list[0].MemberID, list[1].MemberID})
 	}
 }
-
-

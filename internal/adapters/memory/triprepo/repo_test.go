@@ -47,18 +47,18 @@ func TestRepo_ListDraftsVisibleTo_VisibilityRules(t *testing.T) {
 	caller := domain.MemberID("m1")
 
 	tPublicVisible := triprepo.Trip{
-		ID:               "t1",
-		Status:           triprepo.StatusDraft,
-		DraftVisibility:  triprepo.DraftVisibilityPublic,
+		ID:                 "t1",
+		Status:             triprepo.StatusDraft,
+		DraftVisibility:    triprepo.DraftVisibilityPublic,
 		OrganizerMemberIDs: []domain.MemberID{"m1", "m2"},
-		CreatedAt:        time.Unix(10, 0).UTC(),
+		CreatedAt:          time.Unix(10, 0).UTC(),
 	}
 	tPublicNotVisible := triprepo.Trip{
-		ID:               "t2",
-		Status:           triprepo.StatusDraft,
-		DraftVisibility:  triprepo.DraftVisibilityPublic,
+		ID:                 "t2",
+		Status:             triprepo.StatusDraft,
+		DraftVisibility:    triprepo.DraftVisibilityPublic,
 		OrganizerMemberIDs: []domain.MemberID{"m2"},
-		CreatedAt:        time.Unix(20, 0).UTC(),
+		CreatedAt:          time.Unix(20, 0).UTC(),
 	}
 	tPrivateVisible := triprepo.Trip{
 		ID:              "t3",
@@ -93,5 +93,3 @@ func TestRepo_ListDraftsVisibleTo_VisibilityRules(t *testing.T) {
 		t.Fatalf("order=%v, want [t1 t3]", []domain.TripID{got[0].ID, got[1].ID})
 	}
 }
-
-

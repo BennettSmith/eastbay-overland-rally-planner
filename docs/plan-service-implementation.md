@@ -254,17 +254,18 @@ Acceptance criteria:
 
 **Goal**: Replace in-memory adapters with Postgres-backed ones behind the same ports.
 
-- [ ] Define Postgres schema ownership rules (migrations are the source of truth)
-- [ ] Implement `internal/adapters/postgres`:
+- [x] Define Postgres schema ownership rules (migrations are the source of truth)
+- [x] Implement `internal/adapters/postgres`:
   - connect via `pgxpool.Pool`
   - implement repositories for members/trips/rsvps/idempotency
   - transaction boundaries where needed
-- [ ] Add “repository contract tests” runnable against both memory + postgres adapters
-- [ ] Add seed/dev data strategy (keep seed scripts out of migrations; already true)
+- [x] Add “repository contract tests” runnable against both memory + postgres adapters
+- [x] Add seed/dev data strategy (keep seed scripts out of migrations; already true)
 
 Acceptance criteria:
 - App runs with either memory or Postgres adapters via configuration.
 - Repo contract tests pass for both adapter sets.
+- Run is verified in docker desktop, not just from directly running go on the laptop.
 
 ---
 

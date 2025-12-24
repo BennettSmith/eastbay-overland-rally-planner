@@ -33,5 +33,3 @@ func (c *ManualClock) Add(d time.Duration) {
 	defer c.mu.Unlock()
 	c.now = c.now.Add(d)
 }
-
-

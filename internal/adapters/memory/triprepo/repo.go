@@ -201,5 +201,3 @@ func sortTrips(ts []triprepo.Trip) {
 		return string(a.ID) < string(b.ID)
 	})
 }
-
-

@@ -42,5 +42,3 @@ func TestStore_PutThenGet(t *testing.T) {
 		t.Fatalf("Get()=%+v, want %+v", got, rec)
 	}
 }
-
-
