@@ -29,7 +29,7 @@ Publish a trip, enforcing required fields and returning prepared announcement co
    - description
    - startDate
    - endDate
-   - capacityRigs
+   - capacityRigs (must be >= 1)
    - difficultyText
    - meetingLocation
    - commsRequirementsText
@@ -76,7 +76,7 @@ A3 — Publish Canceled Trip
 ## Domain Invariants Enforced
 - Trip must be in `DRAFT` state to publish.
 - Trip must be a `PUBLIC` draft to publish (`draftVisibility = PUBLIC`).
-- Required-at-publish fields must be present and non-empty: name, description, startDate, endDate, capacityRigs, difficultyText, meetingLocation, commsRequirementsText, recommendedRequirementsText, at least one organizer.
+- Required-at-publish fields must be present and non-empty: name, description, startDate, endDate, capacityRigs (>= 1), difficultyText, meetingLocation, commsRequirementsText, recommendedRequirementsText, at least one organizer.
 - Once published, RSVP becomes allowed.
 - At least one organizer must always exist.
 

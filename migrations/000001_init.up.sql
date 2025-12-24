@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS trips (
   status                      trip_status NOT NULL DEFAULT 'DRAFT',
   draft_visibility            draft_visibility NULL,
 
-  capacity_rigs               integer NULL CHECK (capacity_rigs IS NULL OR capacity_rigs >= 0),
+  capacity_rigs               integer NULL CHECK (capacity_rigs IS NULL OR capacity_rigs >= 1),
   difficulty_text             text NULL,
 
   -- Meeting location (embedded as nullable columns)
@@ -375,8 +375,8 @@ BEGIN
     IF NEW.start_date IS NULL OR NEW.end_date IS NULL THEN
       RAISE EXCEPTION 'Trip start_date and end_date are required to publish' USING ERRCODE = '23514';
     END IF;
-    IF NEW.capacity_rigs IS NULL THEN
-      RAISE EXCEPTION 'Trip capacity_rigs is required to publish' USING ERRCODE = '23514';
+    IF NEW.capacity_rigs IS NULL OR NEW.capacity_rigs < 1 THEN
+      RAISE EXCEPTION 'Trip capacity_rigs is required to publish and must be >= 1' USING ERRCODE = '23514';
     END IF;
     IF NEW.difficulty_text IS NULL OR btrim(NEW.difficulty_text) = '' THEN
       RAISE EXCEPTION 'Trip difficulty_text is required to publish' USING ERRCODE = '23514';
@@ -449,6 +449,12 @@ BEGIN
 
   IF t_status <> 'PUBLISHED' THEN
     RAISE EXCEPTION 'RSVPs are only allowed when trip is PUBLISHED (status=%)', t_status
+      USING ERRCODE = '23514';
+  END IF;
+
+  -- Published trips must always have capacity configured (v1).
+  IF t_capacity IS NULL OR t_capacity < 1 THEN
+    RAISE EXCEPTION 'Trip capacity_rigs must be set to >= 1 for RSVPs (capacity_rigs=%)', t_capacity
       USING ERRCODE = '23514';
   END IF;
 
