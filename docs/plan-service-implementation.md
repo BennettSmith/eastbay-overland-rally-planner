@@ -150,17 +150,17 @@ Acceptance criteria:
 
 **Goal**: Define outbound ports and provide in-memory adapters to support fast unit tests.
 
-- [ ] Create outbound port interfaces in `internal/ports` (suggested packages):
+- [x] Create outbound port interfaces in `internal/ports` (suggested packages):
   - `internal/ports/out/memberrepo`
   - `internal/ports/out/triprepo`
   - `internal/ports/out/rsvprepo`
   - `internal/ports/out/idempotency`
   - `internal/ports/out/clock` (if we want deterministic time)
-- [ ] Implement in-memory adapters in `internal/adapters/memory/...`
+- [x] Implement in-memory adapters in `internal/adapters/memory/...`
   - deterministic time + controllable clock for tests
   - thread-safe stores (mutex) so `httptest`/concurrency doesn’t flake
   - optional: simple “transaction-ish” boundary (copy-on-write) for test determinism
-- [ ] Add unit tests for each in-memory adapter (behavior + race-safety expectations)
+- [x] Add unit tests for each in-memory adapter (behavior + race-safety expectations)
 
 Acceptance criteria:
 - App layer can be instantiated with only in-memory adapters.
