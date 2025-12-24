@@ -329,6 +329,12 @@ DECLARE
   organizer_count integer;
   current_yes integer;
 BEGIN
+  -- Trips cannot be un-canceled (v1).
+  IF OLD.status = 'CANCELED' AND NEW.status <> 'CANCELED' THEN
+    RAISE EXCEPTION 'Trip cannot be un-canceled (was % -> %)', OLD.status, NEW.status
+      USING ERRCODE = '23514';
+  END IF;
+
   -- Prevent reducing capacity below current attendance for published trips.
   -- (Drafts have no RSVP; canceled trips are read-only at the app layer but this keeps the DB consistent.)
   IF OLD.status = 'PUBLISHED'

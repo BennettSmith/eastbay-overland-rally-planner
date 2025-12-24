@@ -8,7 +8,7 @@ Cancel a trip. RSVPs are disabled and the trip becomes read-only.
 
 ## Preconditions
 - Caller is authenticated.
-- Target resource exists and is visible/accessible to the caller.
+- Target trip exists and is visible/accessible to the caller.
 
 ## Postconditions
 - System state is updated as described.
@@ -16,12 +16,14 @@ Cancel a trip. RSVPs are disabled and the trip becomes read-only.
 ---
 
 ## Main Success Flow
-1. Actor invokes the use case with the required identifiers and inputs.
+1. Actor requests cancellation for a given `tripId`.
 2. System authenticates the caller.
-3. System authorizes the caller for the target resource (trip/member).
-4. System loads the required aggregate(s) and validates inputs.
-5. System executes the primary behavior.
-6. System returns the result.
+3. System loads the trip by `tripId`.
+4. System authorizes access:
+   - Trip must be visible to the caller; if not, return `404 Not Found` (do not reveal existence).
+   - Caller must be an organizer; if not, return `404 Not Found`.
+5. System transitions the trip status to `CANCELED` (allowed from `DRAFT` or `PUBLISHED`).
+6. System returns the updated trip details.
 
 ---
 
@@ -29,15 +31,14 @@ Cancel a trip. RSVPs are disabled and the trip becomes read-only.
 A1 — Cancel Already Canceled Trip
 - **Condition:** Trip status is already `CANCELED`.
 - **Behavior:** System performs no additional changes.
-- **Outcome:** Success response returned (idempotent).
+- **Outcome:** `200 OK` returned (idempotent).
 
 ---
 
 ## Error Conditions
 - `401 Unauthorized` — caller is not authenticated
-- `403 Forbidden` — caller lacks permission for this operation
-- `404 Not Found` — target resource does not exist
-- `409 Conflict` — domain invariant violated (e.g., capacity reached, missing publish fields, removing last organizer)
+- `404 Not Found` — trip does not exist OR is not visible to the caller
+- `409 Conflict` — cancel is not allowed (e.g., domain invariant violated)
 - `422 Unprocessable Entity` — invalid input values (format/range)
 - `500 Internal Server Error` — unexpected failure
 
@@ -45,26 +46,27 @@ A1 — Cancel Already Canceled Trip
 
 ## Authorization Rules
 - Caller must be an authenticated member.
-- Caller must be an organizer of the target trip.
-- Cancel requires organizer permission on the trip.
+- Trip must be visible to the caller; if not, return `404 Not Found` (do not reveal existence).
+- Caller must be an organizer of the trip; if not, return `404 Not Found`.
 
 ## Domain Invariants Enforced
 - Only organizers may cancel a trip.
 - Trip status transitions to CANCELED (from DRAFT or PUBLISHED).
 - After cancelation, RSVP mutations are disabled.
 - Cancelation is idempotent (canceling an already-canceled trip has no additional effect).
+- No changes are allowed after cancelation; trips cannot be un-canceled.
 
 ---
 
 ## Output
-- Success DTO or confirmation response (depending on operation)
+- Success DTO containing the updated trip.
 
 ---
 
 ## API Notes
 - Suggested endpoint: `POST /trips/{tripId}/cancel`
 - Prefer returning a stable DTO shape; avoid leaking internal persistence fields.
-- Mutating: consider idempotency keys where duplicate submissions are plausible.
+- Cancellation is inherently idempotent; an idempotency key is optional.
 
 ---
 
