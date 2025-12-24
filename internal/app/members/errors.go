@@ -35,5 +35,3 @@ func (e *Error) WithDetails(details map[string]any) *Error {
 	out.Details = cp
 	return &out
 }
-
-

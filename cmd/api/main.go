@@ -10,7 +10,11 @@ import (
 	"time"
 
 	"eastbay-overland-rally-planner/internal/adapters/httpapi"
+	memidempotency "eastbay-overland-rally-planner/internal/adapters/memory/idempotency"
+	memmemberrepo "eastbay-overland-rally-planner/internal/adapters/memory/memberrepo"
+	"eastbay-overland-rally-planner/internal/app/members"
 	"eastbay-overland-rally-planner/internal/platform/auth/jwtverifier"
+	platformclock "eastbay-overland-rally-planner/internal/platform/clock"
 	"eastbay-overland-rally-planner/internal/platform/config"
 )
 
@@ -24,10 +28,17 @@ func main() {
 	verifier := jwtverifier.New(jwtCfg)
 	authMW := httpapi.NewAuthMiddleware(verifier)
 
-	// Temporary strict-server stub (we'll swap this out once app services exist),
-	// but the HTTP layer is already "real" (auth + error shaping).
+	// In-memory dependencies (Milestone 3). We'll swap these to Postgres adapters later.
+	clk := platformclock.NewSystemClock()
+	memberRepo := memmemberrepo.NewRepo()
+	idemStore := memidempotency.NewStore()
+	memberSvc := members.NewService(memberRepo, clk)
+
+	// Real server implementation for Members; other endpoints remain strict-unimplemented.
+	api := httpapi.NewServer(memberSvc, idemStore)
+
 	handler := httpapi.NewRouterWithOptions(
-		httpapi.StrictUnimplemented{},
+		api,
 		httpapi.RouterOptions{AuthMiddleware: authMW},
 	)
 

@@ -177,10 +177,10 @@ Acceptance criteria:
 - `GET /members/me`
 - `PATCH /members/me`
 
-- [ ] Define domain model for `Member` (IDs, display name, email, vehicle profile)
-- [ ] Implement application services for Member use-cases in `internal/app`
-- [ ] Implement HTTP adapter handlers (translate OAS DTOs ↔ domain/app types)
-- [ ] Unit tests:
+- [x] Define domain model for `Member` (IDs, display name, email, vehicle profile)
+- [x] Implement application services for Member use-cases in `internal/app`
+- [x] Implement HTTP adapter handlers (translate OAS DTOs ↔ domain/app types)
+- [x] Unit tests:
   - app-layer tests for each use-case (happy + edge cases)
   - adapter tests for request/response mapping (table-driven)
 
