@@ -238,6 +238,28 @@ If you want an HTML coverage report:
 make cover-html
 ```
 
+## Integration tests (HTTP black-box)
+
+Integration tests live in `internal/adapters/httpapi/itest` and spin up an `httptest` server using the real HTTP router + handlers.
+
+- **Run integration tests with the in-memory backend (default)**:
+
+```bash
+make itest
+```
+
+- **Run integration tests with Postgres** (destructive: resets `public` schema via migrations; use a disposable DB):
+
+```bash
+make itest-postgres PG_DSN='postgres://eb:eb@localhost:5432/eastbay?sslmode=disable'
+```
+
+- **Run both** (Postgres subtests auto-skip if `PG_DSN` is unset):
+
+```bash
+make itest-all
+```
+
 ## Environment variables
 
 - **Auth (required)**:
@@ -249,6 +271,9 @@ make cover-html
   - `DATABASE_URL`: required when `STORAGE_BACKEND=postgres`
 - **Postgres contract tests (optional)**:
   - `PG_DSN`: if set, Postgres adapter contract tests will run (they reset the `public` schema; use a disposable database).
+- **HTTP integration tests (optional)**:
+  - `ITEST_BACKEND`: `memory` (default), `postgres`, or `all`
+  - `PG_DSN`: required when `ITEST_BACKEND=postgres` (also used by contract tests; destructive: resets `public` schema)
 
 ## Run migrations
 

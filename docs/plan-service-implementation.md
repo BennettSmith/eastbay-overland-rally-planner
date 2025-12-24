@@ -273,12 +273,13 @@ Acceptance criteria:
 
 **Goal**: Comprehensive black-box tests from HTTP layer down (initially with in-memory, later with Postgres).
 
-- [ ] Add `internal/adapters/httpapi/itest` package (or `internal/itest`)
+- [x] Add `internal/adapters/httpapi/itest` package (or `internal/itest`)
+- [x] Run itests with either in-memory or Postgres backend (configurable)
 - [ ] For each endpoint:
-  - happy path
-  - auth failure
-  - validation failure
-  - not-found/conflict cases
+  - [x] happy path (starter coverage: Members)
+  - [x] auth failure (starter coverage: Members)
+  - [ ] validation failure
+  - [ ] not-found/conflict cases
 - [ ] Add “golden JSON” response assertions where stable
 
 Acceptance criteria:

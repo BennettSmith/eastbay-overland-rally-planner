@@ -23,7 +23,7 @@ func OpenMigratedPool(t *testing.T) *pgxpool.Pool {
 
 	dsn := os.Getenv("PG_DSN")
 	if dsn == "" {
-		t.Skip("PG_DSN not set; skipping Postgres contract tests")
+		t.Skip("PG_DSN not set; skipping Postgres-backed tests")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

@@ -54,6 +54,7 @@ KEYCLOAK_PASSWORD ?= alice
 # Connection string for local host access (psql on host)
 DATABASE_URL ?= postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@localhost:$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode=disable
 
+
 # Export these so `docker compose` picks them up for variable interpolation.
 export POSTGRES_USER
 export POSTGRES_PASSWORD
@@ -246,6 +247,18 @@ fmt:
 .PHONY: test
 test:
 	@$(GO) test $(PKGS)
+
+.PHONY: itest
+itest:
+	@PG_DSN= ITEST_BACKEND=memory $(GO) test ./internal/adapters/httpapi/itest -count=1
+
+.PHONY: itest-postgres
+itest-postgres:
+	@ITEST_BACKEND=postgres $(GO) test ./internal/adapters/httpapi/itest -count=1
+
+.PHONY: itest-all
+itest-all:
+	@ITEST_BACKEND=all $(GO) test ./internal/adapters/httpapi/itest -count=1
 
 .PHONY: cover
 cover:
