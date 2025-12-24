@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/oapi-codegen/nullable"
 
 	"eastbay-overland-rally-planner/internal/adapters/httpapi/oas"
 )
@@ -14,11 +15,10 @@ func writeOASError(w http.ResponseWriter, r *http.Request, status int, code stri
 	er.Error.Code = code
 	er.Error.Message = message
 	if details != nil {
-		m := map[string]any(details)
-		er.Error.Details = &m
+		er.Error.Details = nullable.NewNullableWithValue(map[string]any(details))
 	}
 	if rid := middleware.GetReqID(r.Context()); rid != "" {
-		er.Error.RequestId = &rid
+		er.Error.RequestId = nullable.NewNullableWithValue(rid)
 	}
 
 	w.Header().Set("Content-Type", "application/json")

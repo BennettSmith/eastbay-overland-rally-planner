@@ -121,9 +121,7 @@ db-reset: db-drop db-create db-migrate db-seed
 .PHONY: gen-openapi
 gen-openapi:
 	@go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.5.1 \
-		-generate types,chi-server,strict-server \
-		-package oas \
-		-o internal/adapters/httpapi/oas/api.gen.go \
+		-config oapi-codegen.yaml \
 		openapi.yaml
 
 # --- Go quality-of-life targets (Milestone 0) ---

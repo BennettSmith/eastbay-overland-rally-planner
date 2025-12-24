@@ -1,0 +1,9 @@
+package: oas
+generate:
+  models: true
+  chi-server: true
+  strict-server: true
+output: internal/adapters/httpapi/oas/api.gen.go
+output-options:
+  nullable-type: true
+

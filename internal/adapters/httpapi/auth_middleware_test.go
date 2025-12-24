@@ -96,8 +96,11 @@ func TestAuthMiddleware_MissingHeader_401(t *testing.T) {
 	if er.Error.Code != "UNAUTHORIZED" {
 		t.Fatalf("code: got %q", er.Error.Code)
 	}
-	if er.Error.RequestId == nil || *er.Error.RequestId == "" {
+	if !er.Error.RequestId.IsSpecified() || er.Error.RequestId.IsNull() {
 		t.Fatalf("expected requestId to be set")
+	}
+	if rid, err := er.Error.RequestId.Get(); err != nil || rid == "" {
+		t.Fatalf("expected requestId to be a non-empty string")
 	}
 }
 

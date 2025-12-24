@@ -19,6 +19,10 @@ type Member struct {
 	DisplayName string
 	// Email is stored for the member profile, but is not safe to return in directory/search.
 	Email string
+	// GroupAliasEmail is an optional email address used for group aliasing; nil means unset.
+	GroupAliasEmail *string
+	// VehicleProfile is optional informational member metadata; nil means unset.
+	VehicleProfile *domain.VehicleProfile
 
 	IsActive bool
 

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/oapi-codegen/nullable"
 	"github.com/oapi-codegen/runtime"
 	strictnethttp "github.com/oapi-codegen/runtime/strictmiddleware/nethttp"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -60,10 +61,10 @@ type ArtifactType string
 // CreateMemberRequest defines model for CreateMemberRequest.
 type CreateMemberRequest struct {
 	// DisplayName Display name. Server trims leading/trailing whitespace and collapses internal whitespace runs before persisting.
-	DisplayName     string               `json:"displayName"`
-	Email           openapi_types.Email  `json:"email"`
-	GroupAliasEmail *openapi_types.Email `json:"groupAliasEmail"`
-	VehicleProfile  *VehicleProfile      `json:"vehicleProfile,omitempty"`
+	DisplayName     string                                 `json:"displayName"`
+	Email           openapi_types.Email                    `json:"email"`
+	GroupAliasEmail nullable.Nullable[openapi_types.Email] `json:"groupAliasEmail,omitempty"`
+	VehicleProfile  *VehicleProfile                        `json:"vehicleProfile,omitempty"`
 }
 
 // CreateMemberResponse defines model for CreateMemberResponse.
@@ -89,31 +90,31 @@ type DraftVisibility string
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
 	Error struct {
-		Code      string                  `json:"code"`
-		Details   *map[string]interface{} `json:"details"`
-		Message   string                  `json:"message"`
-		RequestId *string                 `json:"requestId"`
+		Code      string                                    `json:"code"`
+		Details   nullable.Nullable[map[string]interface{}] `json:"details,omitempty"`
+		Message   string                                    `json:"message"`
+		RequestId nullable.Nullable[string]                 `json:"requestId,omitempty"`
 	} `json:"error"`
 }
 
 // Location defines model for Location.
 type Location struct {
-	Address           *string `json:"address"`
-	Label             string  `json:"label"`
-	LatitudeLongitude *struct {
+	Address           nullable.Nullable[string] `json:"address,omitempty"`
+	Label             string                    `json:"label"`
+	LatitudeLongitude nullable.Nullable[struct {
 		Latitude  *float64 `json:"latitude,omitempty"`
 		Longitude *float64 `json:"longitude,omitempty"`
-	} `json:"latitudeLongitude"`
+	}] `json:"latitudeLongitude,omitempty"`
 }
 
 // LocationPatch Partial update shape for Location. Omitted fields are unchanged.
 type LocationPatch struct {
-	Address           *string `json:"address"`
-	Label             *string `json:"label"`
-	LatitudeLongitude *struct {
-		Latitude  *float64 `json:"latitude"`
-		Longitude *float64 `json:"longitude"`
-	} `json:"latitudeLongitude"`
+	Address           nullable.Nullable[string] `json:"address,omitempty"`
+	Label             nullable.Nullable[string] `json:"label,omitempty"`
+	LatitudeLongitude nullable.Nullable[struct {
+		Latitude  nullable.Nullable[float64] `json:"latitude,omitempty"`
+		Longitude nullable.Nullable[float64] `json:"longitude,omitempty"`
+	}] `json:"latitudeLongitude,omitempty"`
 }
 
 // MemberDirectoryEntry Minimal member directory entry (no email fields).
@@ -124,19 +125,19 @@ type MemberDirectoryEntry struct {
 
 // MemberProfile defines model for MemberProfile.
 type MemberProfile struct {
-	DisplayName     string               `json:"displayName"`
-	Email           openapi_types.Email  `json:"email"`
-	GroupAliasEmail *openapi_types.Email `json:"groupAliasEmail"`
-	MemberId        string               `json:"memberId"`
-	VehicleProfile  *VehicleProfile      `json:"vehicleProfile,omitempty"`
+	DisplayName     string                                 `json:"displayName"`
+	Email           openapi_types.Email                    `json:"email"`
+	GroupAliasEmail nullable.Nullable[openapi_types.Email] `json:"groupAliasEmail,omitempty"`
+	MemberId        string                                 `json:"memberId"`
+	VehicleProfile  *VehicleProfile                        `json:"vehicleProfile,omitempty"`
 }
 
 // MemberSummary defines model for MemberSummary.
 type MemberSummary struct {
-	DisplayName     string               `json:"displayName"`
-	Email           openapi_types.Email  `json:"email"`
-	GroupAliasEmail *openapi_types.Email `json:"groupAliasEmail"`
-	MemberId        string               `json:"memberId"`
+	DisplayName     string                                 `json:"displayName"`
+	Email           openapi_types.Email                    `json:"email"`
+	GroupAliasEmail nullable.Nullable[openapi_types.Email] `json:"groupAliasEmail,omitempty"`
+	MemberId        string                                 `json:"memberId"`
 }
 
 // MyRSVP defines model for MyRSVP.
@@ -193,24 +194,24 @@ type TripDetails struct {
 	Artifacts []TripArtifact `json:"artifacts"`
 
 	// CapacityRigs For published trips, capacity is required and must be >= 1.
-	CapacityRigs                *int                `json:"capacityRigs"`
-	CommsRequirementsText       *string             `json:"commsRequirementsText"`
-	Description                 *string             `json:"description"`
-	DifficultyText              *string             `json:"difficultyText"`
-	DraftVisibility             *DraftVisibility    `json:"draftVisibility,omitempty"`
-	EndDate                     *openapi_types.Date `json:"endDate"`
-	MeetingLocation             *Location           `json:"meetingLocation,omitempty"`
-	MyRsvp                      *MyRSVP             `json:"myRsvp,omitempty"`
-	Name                        *string             `json:"name"`
-	Organizers                  []MemberSummary     `json:"organizers"`
-	RecommendedRequirementsText *string             `json:"recommendedRequirementsText"`
+	CapacityRigs                nullable.Nullable[int]                `json:"capacityRigs,omitempty"`
+	CommsRequirementsText       nullable.Nullable[string]             `json:"commsRequirementsText,omitempty"`
+	Description                 nullable.Nullable[string]             `json:"description,omitempty"`
+	DifficultyText              nullable.Nullable[string]             `json:"difficultyText,omitempty"`
+	DraftVisibility             *DraftVisibility                      `json:"draftVisibility,omitempty"`
+	EndDate                     nullable.Nullable[openapi_types.Date] `json:"endDate,omitempty"`
+	MeetingLocation             *Location                             `json:"meetingLocation,omitempty"`
+	MyRsvp                      *MyRSVP                               `json:"myRsvp,omitempty"`
+	Name                        nullable.Nullable[string]             `json:"name,omitempty"`
+	Organizers                  []MemberSummary                       `json:"organizers"`
+	RecommendedRequirementsText nullable.Nullable[string]             `json:"recommendedRequirementsText,omitempty"`
 
 	// RsvpActionsEnabled False for drafts and canceled trips.
-	RsvpActionsEnabled bool                `json:"rsvpActionsEnabled"`
-	RsvpSummary        *TripRSVPSummary    `json:"rsvpSummary,omitempty"`
-	StartDate          *openapi_types.Date `json:"startDate"`
-	Status             TripStatus          `json:"status"`
-	TripId             string              `json:"tripId"`
+	RsvpActionsEnabled bool                                  `json:"rsvpActionsEnabled"`
+	RsvpSummary        *TripRSVPSummary                      `json:"rsvpSummary,omitempty"`
+	StartDate          nullable.Nullable[openapi_types.Date] `json:"startDate,omitempty"`
+	Status             TripStatus                            `json:"status"`
+	TripId             string                                `json:"tripId"`
 }
 
 // TripRSVPSummary defines model for TripRSVPSummary.
@@ -219,8 +220,8 @@ type TripRSVPSummary struct {
 	AttendingRigs    int             `json:"attendingRigs"`
 
 	// CapacityRigs For published trips, capacity is required and must be >= 1.
-	CapacityRigs        *int            `json:"capacityRigs"`
-	NotAttendingMembers []MemberSummary `json:"notAttendingMembers"`
+	CapacityRigs        nullable.Nullable[int] `json:"capacityRigs,omitempty"`
+	NotAttendingMembers []MemberSummary        `json:"notAttendingMembers"`
 }
 
 // TripResponse defines model for TripResponse.
@@ -234,27 +235,27 @@ type TripStatus string
 // TripSummary defines model for TripSummary.
 type TripSummary struct {
 	// AttendingRigs Present only when `status = PUBLISHED`. Omitted for `DRAFT` and `CANCELED`.
-	AttendingRigs *int `json:"attendingRigs"`
+	AttendingRigs nullable.Nullable[int] `json:"attendingRigs,omitempty"`
 
 	// CapacityRigs For published trips, capacity is required and must be >= 1.
-	CapacityRigs    *int                `json:"capacityRigs"`
-	DraftVisibility *DraftVisibility    `json:"draftVisibility,omitempty"`
-	EndDate         *openapi_types.Date `json:"endDate"`
-	Name            *string             `json:"name"`
-	StartDate       *openapi_types.Date `json:"startDate"`
-	Status          TripStatus          `json:"status"`
-	TripId          string              `json:"tripId"`
+	CapacityRigs    nullable.Nullable[int]                `json:"capacityRigs,omitempty"`
+	DraftVisibility *DraftVisibility                      `json:"draftVisibility,omitempty"`
+	EndDate         nullable.Nullable[openapi_types.Date] `json:"endDate,omitempty"`
+	Name            nullable.Nullable[string]             `json:"name,omitempty"`
+	StartDate       nullable.Nullable[openapi_types.Date] `json:"startDate,omitempty"`
+	Status          TripStatus                            `json:"status"`
+	TripId          string                                `json:"tripId"`
 }
 
 // UpdateMyMemberProfileRequest Partial update; only provided fields are applied.
 type UpdateMyMemberProfileRequest struct {
 	// DisplayName Display name. Server trims leading/trailing whitespace and collapses internal whitespace runs before persisting.
-	DisplayName *string `json:"displayName"`
+	DisplayName nullable.Nullable[string] `json:"displayName,omitempty"`
 
 	// Email Member email address. Cannot be cleared. Must be unique across members.
-	Email           *openapi_types.Email `json:"email,omitempty"`
-	GroupAliasEmail *openapi_types.Email `json:"groupAliasEmail"`
-	VehicleProfile  *VehicleProfile      `json:"vehicleProfile,omitempty"`
+	Email           *openapi_types.Email                   `json:"email,omitempty"`
+	GroupAliasEmail nullable.Nullable[openapi_types.Email] `json:"groupAliasEmail,omitempty"`
+	VehicleProfile  *VehicleProfile                        `json:"vehicleProfile,omitempty"`
 }
 
 // UpdateMyMemberProfileResponse defines model for UpdateMyMemberProfileResponse.
@@ -265,34 +266,34 @@ type UpdateMyMemberProfileResponse struct {
 // UpdateTripRequest Partial update; only provided fields are applied.
 type UpdateTripRequest struct {
 	// ArtifactIds Replace the full artifact list for the trip with this ordered list of artifact IDs.
-	ArtifactIds *[]string `json:"artifactIds"`
+	ArtifactIds nullable.Nullable[[]string] `json:"artifactIds,omitempty"`
 
 	// CapacityRigs For published trips, capacity cannot be reduced below the current attending rigs count (YES RSVPs).
-	CapacityRigs          *int                `json:"capacityRigs"`
-	CommsRequirementsText *string             `json:"commsRequirementsText"`
-	Description           *string             `json:"description"`
-	DifficultyText        *string             `json:"difficultyText"`
-	EndDate               *openapi_types.Date `json:"endDate"`
+	CapacityRigs          nullable.Nullable[int]                `json:"capacityRigs,omitempty"`
+	CommsRequirementsText nullable.Nullable[string]             `json:"commsRequirementsText,omitempty"`
+	Description           nullable.Nullable[string]             `json:"description,omitempty"`
+	DifficultyText        nullable.Nullable[string]             `json:"difficultyText,omitempty"`
+	EndDate               nullable.Nullable[openapi_types.Date] `json:"endDate,omitempty"`
 
 	// MeetingLocation Partial update shape for Location. Omitted fields are unchanged.
 	MeetingLocation *LocationPatch `json:"meetingLocation,omitempty"`
 
 	// Name Title. Server trims leading/trailing whitespace and collapses internal whitespace runs before persisting.
-	Name                        *string             `json:"name,omitempty"`
-	RecommendedRequirementsText *string             `json:"recommendedRequirementsText"`
-	StartDate                   *openapi_types.Date `json:"startDate"`
+	Name                        *string                               `json:"name,omitempty"`
+	RecommendedRequirementsText nullable.Nullable[string]             `json:"recommendedRequirementsText,omitempty"`
+	StartDate                   nullable.Nullable[openapi_types.Date] `json:"startDate,omitempty"`
 }
 
 // VehicleProfile defines model for VehicleProfile.
 type VehicleProfile struct {
-	FuelRange        *string `json:"fuelRange"`
-	HamRadioCallSign *string `json:"hamRadioCallSign"`
-	LiftLockers      *string `json:"liftLockers"`
-	Make             *string `json:"make"`
-	Model            *string `json:"model"`
-	Notes            *string `json:"notes"`
-	RecoveryGear     *string `json:"recoveryGear"`
-	TireSize         *string `json:"tireSize"`
+	FuelRange        nullable.Nullable[string] `json:"fuelRange,omitempty"`
+	HamRadioCallSign nullable.Nullable[string] `json:"hamRadioCallSign,omitempty"`
+	LiftLockers      nullable.Nullable[string] `json:"liftLockers,omitempty"`
+	Make             nullable.Nullable[string] `json:"make,omitempty"`
+	Model            nullable.Nullable[string] `json:"model,omitempty"`
+	Notes            nullable.Nullable[string] `json:"notes,omitempty"`
+	RecoveryGear     nullable.Nullable[string] `json:"recoveryGear,omitempty"`
+	TireSize         nullable.Nullable[string] `json:"tireSize,omitempty"`
 }
 
 // IdempotencyKey defines model for IdempotencyKey.

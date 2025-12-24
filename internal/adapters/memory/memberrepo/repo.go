@@ -134,8 +134,39 @@ func (r *Repo) SearchActiveByDisplayName(ctx context.Context, query string, limi
 }
 
 func cloneMember(m memberrepo.Member) memberrepo.Member {
-	// All fields are value types currently; keep helper for future slice fields.
-	return m
+	out := m
+	if m.GroupAliasEmail != nil {
+		v := *m.GroupAliasEmail
+		out.GroupAliasEmail = &v
+	}
+	if m.VehicleProfile != nil {
+		out.VehicleProfile = cloneVehicleProfile(m.VehicleProfile)
+	}
+	return out
+}
+
+func cloneVehicleProfile(vp *domain.VehicleProfile) *domain.VehicleProfile {
+	if vp == nil {
+		return nil
+	}
+	out := *vp
+	out.Make = cloneStringPtr(vp.Make)
+	out.Model = cloneStringPtr(vp.Model)
+	out.TireSize = cloneStringPtr(vp.TireSize)
+	out.LiftLockers = cloneStringPtr(vp.LiftLockers)
+	out.FuelRange = cloneStringPtr(vp.FuelRange)
+	out.RecoveryGear = cloneStringPtr(vp.RecoveryGear)
+	out.HamRadioCallSign = cloneStringPtr(vp.HamRadioCallSign)
+	out.Notes = cloneStringPtr(vp.Notes)
+	return &out
+}
+
+func cloneStringPtr(p *string) *string {
+	if p == nil {
+		return nil
+	}
+	v := *p
+	return &v
 }
 
 func sortMembersByDisplayName(ms []memberrepo.Member) {
