@@ -240,10 +240,10 @@ Acceptance criteria:
 - `GET /trips/{tripId}/rsvp/me`
 - `GET /trips/{tripId}/rsvps`
 
-- [ ] Implement RSVP domain + invariants (YES/NO/UNSET, timestamps)
-- [ ] Implement app services + in-memory storage
-- [ ] Ensure RSVP counts affect `attendingRigs` rules (as defined by use-cases)
-- [ ] Tests for RSVP summary correctness and edge cases
+- [x] Implement RSVP domain + invariants (YES/NO/UNSET, timestamps)
+- [x] Implement app services + in-memory storage
+- [x] Ensure RSVP counts affect `attendingRigs` rules (as defined by use-cases)
+- [x] Tests for RSVP summary correctness and edge cases
 
 Acceptance criteria:
 - RSVP summary matches OpenAPI schema and updates correctly after changes.

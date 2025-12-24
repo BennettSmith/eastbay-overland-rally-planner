@@ -12,6 +12,7 @@ import (
 	memclock "eastbay-overland-rally-planner/internal/adapters/memory/clock"
 	memidempotency "eastbay-overland-rally-planner/internal/adapters/memory/idempotency"
 	memmemberrepo "eastbay-overland-rally-planner/internal/adapters/memory/memberrepo"
+	memrsvprepo "eastbay-overland-rally-planner/internal/adapters/memory/rsvprepo"
 	memtriprepo "eastbay-overland-rally-planner/internal/adapters/memory/triprepo"
 	"eastbay-overland-rally-planner/internal/adapters/httpapi/oas"
 	"eastbay-overland-rally-planner/internal/app/members"
@@ -53,9 +54,10 @@ func newTestTripRouter(t *testing.T) (http.Handler, func(now time.Time, kid stri
 	clk := memclock.NewManualClock(time.Unix(100, 0).UTC())
 	memberRepo := memmemberrepo.NewRepo()
 	tripRepo := memtriprepo.NewRepo()
+	rsvpRepo := memrsvprepo.NewRepo()
 	idem := memidempotency.NewStore()
 	memberSvc := members.NewService(memberRepo, clk)
-	tripSvc := trips.NewService(tripRepo, memberRepo)
+	tripSvc := trips.NewService(tripRepo, memberRepo, rsvpRepo)
 
 	api := NewServer(memberSvc, tripSvc, idem)
 	h := NewRouterWithOptions(api, RouterOptions{AuthMiddleware: NewAuthMiddleware(v)})
@@ -458,6 +460,135 @@ func TestTrips_OrganizerFlow_SetVisibility_AddRemove_LastOrganizer(t *testing.T)
 	h.ServeHTTP(recDelCreator, reqDelCreator)
 	if recDelCreator.Code != http.StatusConflict {
 		t.Fatalf("delCreator status=%d body=%s", recDelCreator.Code, recDelCreator.Body.String())
+	}
+}
+
+func TestTrips_RSVP_Flow_SetGetSummary_IdempotencyAndCapacity(t *testing.T) {
+	t.Parallel()
+
+	h, mint, tripRepo, _ := newTestTripRouter(t)
+	authz1 := "Bearer " + mint(time.Unix(1700000000, 0), "kid-1", "sub-1")
+	authz2 := "Bearer " + mint(time.Unix(1700000000, 0), "kid-1", "sub-2")
+	m1 := provisionCaller(t, h, authz1, "alice1@example.com")
+	m2 := provisionCaller(t, h, authz2, "bob2@example.com")
+
+	// Seed a published trip with capacity 1 and attendingRigs=0.
+	name := "RSVP Trip"
+	cap := 1
+	att := 0
+	now := time.Unix(10, 0).UTC()
+	_ = tripRepo.Create(context.Background(), porttriprepo.Trip{
+		ID:                "tr",
+		Status:            porttriprepo.StatusPublished,
+		Name:              &name,
+		CapacityRigs:      &cap,
+		AttendingRigs:     &att,
+		CreatorMemberID:   m1,
+		OrganizerMemberIDs: []domain.MemberID{m1, m2},
+		DraftVisibility:   porttriprepo.DraftVisibilityPublic,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	})
+
+	// Before setting, GET my RSVP should 404.
+	reqMy404 := httptest.NewRequest(http.MethodGet, "/trips/tr/rsvp/me", nil)
+	reqMy404.Header.Set("Authorization", authz1)
+	recMy404 := httptest.NewRecorder()
+	h.ServeHTTP(recMy404, reqMy404)
+	if recMy404.Code != http.StatusNotFound {
+		t.Fatalf("my404 status=%d body=%s", recMy404.Code, recMy404.Body.String())
+	}
+
+	// Set YES for m1.
+	reqSet := httptest.NewRequest(http.MethodPut, "/trips/tr/rsvp", bytes.NewBufferString(`{"response":"YES"}`))
+	reqSet.Header.Set("Authorization", authz1)
+	reqSet.Header.Set("Content-Type", "application/json")
+	reqSet.Header.Set("Idempotency-Key", "idem-rsvp-1")
+	recSet := httptest.NewRecorder()
+	h.ServeHTTP(recSet, reqSet)
+	if recSet.Code != http.StatusOK {
+		t.Fatalf("set status=%d body=%s", recSet.Code, recSet.Body.String())
+	}
+	var setResp struct {
+		MyRsvp oas.MyRSVP `json:"myRsvp"`
+	}
+	if err := json.Unmarshal(recSet.Body.Bytes(), &setResp); err != nil {
+		t.Fatalf("decode set: %v", err)
+	}
+	if setResp.MyRsvp.TripId != "tr" || setResp.MyRsvp.MemberId != string(m1) || setResp.MyRsvp.Response != "YES" || setResp.MyRsvp.UpdatedAt.IsZero() {
+		t.Fatalf("setResp=%+v", setResp.MyRsvp)
+	}
+
+	// Same idempotency key + same payload should replay.
+	reqSet2 := httptest.NewRequest(http.MethodPut, "/trips/tr/rsvp", bytes.NewBufferString(`{"response":"YES"}`))
+	reqSet2.Header.Set("Authorization", authz1)
+	reqSet2.Header.Set("Content-Type", "application/json")
+	reqSet2.Header.Set("Idempotency-Key", "idem-rsvp-1")
+	recSet2 := httptest.NewRecorder()
+	h.ServeHTTP(recSet2, reqSet2)
+	if recSet2.Code != http.StatusOK {
+		t.Fatalf("set2 status=%d body=%s", recSet2.Code, recSet2.Body.String())
+	}
+
+	// Same idempotency key + different payload should 409.
+	reqSet3 := httptest.NewRequest(http.MethodPut, "/trips/tr/rsvp", bytes.NewBufferString(`{"response":"NO"}`))
+	reqSet3.Header.Set("Authorization", authz1)
+	reqSet3.Header.Set("Content-Type", "application/json")
+	reqSet3.Header.Set("Idempotency-Key", "idem-rsvp-1")
+	recSet3 := httptest.NewRecorder()
+	h.ServeHTTP(recSet3, reqSet3)
+	if recSet3.Code != http.StatusConflict {
+		t.Fatalf("set3 status=%d body=%s", recSet3.Code, recSet3.Body.String())
+	}
+
+	// Capacity reached: m2 cannot set YES.
+	reqCap := httptest.NewRequest(http.MethodPut, "/trips/tr/rsvp", bytes.NewBufferString(`{"response":"YES"}`))
+	reqCap.Header.Set("Authorization", authz2)
+	reqCap.Header.Set("Content-Type", "application/json")
+	reqCap.Header.Set("Idempotency-Key", "idem-rsvp-2")
+	recCap := httptest.NewRecorder()
+	h.ServeHTTP(recCap, reqCap)
+	if recCap.Code != http.StatusConflict {
+		t.Fatalf("cap status=%d body=%s", recCap.Code, recCap.Body.String())
+	}
+
+	// Summary should show attendingRigs=1 and include m1, omit m2 (no record) and UNSET.
+	reqSum := httptest.NewRequest(http.MethodGet, "/trips/tr/rsvps", nil)
+	reqSum.Header.Set("Authorization", authz1)
+	recSum := httptest.NewRecorder()
+	h.ServeHTTP(recSum, reqSum)
+	if recSum.Code != http.StatusOK {
+		t.Fatalf("sum status=%d body=%s", recSum.Code, recSum.Body.String())
+	}
+	var sumResp struct {
+		RsvpSummary oas.TripRSVPSummary `json:"rsvpSummary"`
+	}
+	if err := json.Unmarshal(recSum.Body.Bytes(), &sumResp); err != nil {
+		t.Fatalf("decode sum: %v", err)
+	}
+	if sumResp.RsvpSummary.AttendingRigs != 1 || len(sumResp.RsvpSummary.AttendingMembers) != 1 {
+		t.Fatalf("summary=%+v", sumResp.RsvpSummary)
+	}
+	if sumResp.RsvpSummary.AttendingMembers[0].MemberId != string(m1) {
+		t.Fatalf("attendingMembers=%+v", sumResp.RsvpSummary.AttendingMembers)
+	}
+
+	// Trip details should include rsvpSummary, and myRsvp for caller only when present.
+	reqTrip := httptest.NewRequest(http.MethodGet, "/trips/tr", nil)
+	reqTrip.Header.Set("Authorization", authz1)
+	recTrip := httptest.NewRecorder()
+	h.ServeHTTP(recTrip, reqTrip)
+	if recTrip.Code != http.StatusOK {
+		t.Fatalf("trip status=%d body=%s", recTrip.Code, recTrip.Body.String())
+	}
+	var tripResp struct {
+		Trip oas.TripDetails `json:"trip"`
+	}
+	if err := json.Unmarshal(recTrip.Body.Bytes(), &tripResp); err != nil {
+		t.Fatalf("decode trip: %v", err)
+	}
+	if tripResp.Trip.RsvpSummary == nil || tripResp.Trip.MyRsvp == nil {
+		t.Fatalf("expected rsvpSummary and myRsvp in trip details for m1")
 	}
 }
 

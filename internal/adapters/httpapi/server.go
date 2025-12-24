@@ -969,6 +969,159 @@ func (s *Server) RemoveTripOrganizer(ctx context.Context, req oas.RemoveTripOrga
 	return oas.RemoveTripOrganizer200JSONResponse(resp), nil
 }
 
+func (s *Server) SetMyRSVP(ctx context.Context, req oas.SetMyRSVPRequestObject) (oas.SetMyRSVPResponseObject, error) {
+	sub, ok := SubjectFromContext(ctx)
+	if !ok {
+		return oas.SetMyRSVP401JSONResponse{UnauthorizedJSONResponse: oas.UnauthorizedJSONResponse(oasError(ctx, "UNAUTHORIZED", "missing subject", nil))}, nil
+	}
+	me, err := s.Members.GetMyMemberProfile(ctx, domain.SubjectID(sub))
+	if err != nil {
+		if isMemberNotProvisioned(err) {
+			return oas.SetMyRSVP401JSONResponse{UnauthorizedJSONResponse: oas.UnauthorizedJSONResponse(oasError(ctx, "MEMBER_NOT_PROVISIONED", "No member profile exists for the authenticated subject.", nil))}, nil
+		}
+		return nil, err
+	}
+	if req.Body == nil {
+		return oas.SetMyRSVP422JSONResponse{UnprocessableEntityJSONResponse: oas.UnprocessableEntityJSONResponse(oasError(ctx, "VALIDATION_ERROR", "missing request body", nil))}, nil
+	}
+
+	bodyHash, err := hashSetMyRSVPBody(req.TripId, *req.Body)
+	if err != nil {
+		return nil, err
+	}
+	metaFP := idempotency.Fingerprint{
+		Key:      idempotency.Key(req.Params.IdempotencyKey),
+		Subject:  domain.SubjectID(sub),
+		Method:   http.MethodPut,
+		Route:    "/trips/{tripId}/rsvp",
+		BodyHash: "",
+	}
+	if s.Idem != nil {
+		if meta, ok, err := s.Idem.Get(ctx, metaFP); err != nil {
+			return nil, err
+		} else if ok {
+			if string(meta.Body) != bodyHash {
+				return oas.SetMyRSVP409JSONResponse{ConflictJSONResponse: oas.ConflictJSONResponse(oasError(ctx, "IDEMPOTENCY_KEY_REUSE", "idempotency key reuse with different payload", nil))}, nil
+			}
+		} else {
+			_ = s.Idem.Put(ctx, metaFP, idempotency.Record{
+				StatusCode:  0,
+				ContentType: "text/plain",
+				Body:        []byte(bodyHash),
+				CreatedAt:   time.Now().UTC(),
+			})
+		}
+
+		respFP := metaFP
+		respFP.BodyHash = bodyHash
+		if rec, ok, err := s.Idem.Get(ctx, respFP); err != nil {
+			return nil, err
+		} else if ok && rec.StatusCode == http.StatusOK && strings.HasPrefix(rec.ContentType, "application/json") {
+			var payload oas.SetMyRSVPResponse
+			if err := json.Unmarshal(rec.Body, &payload); err == nil {
+				return oas.SetMyRSVP200JSONResponse(payload), nil
+			}
+		}
+	}
+
+	my, err := s.Trips.SetMyRSVP(ctx, me.ID, domain.TripID(req.TripId), domain.RSVPResponse(req.Body.Response))
+	if err != nil {
+		if ae := (*trips.Error)(nil); errors.As(err, &ae) {
+			switch ae.Status {
+			case http.StatusNotFound:
+				return oas.SetMyRSVP404JSONResponse{NotFoundJSONResponse: oas.NotFoundJSONResponse(oasError(ctx, ae.Code, ae.Message, ae.Details))}, nil
+			case http.StatusConflict:
+				return oas.SetMyRSVP409JSONResponse{ConflictJSONResponse: oas.ConflictJSONResponse(oasError(ctx, ae.Code, ae.Message, ae.Details))}, nil
+			case http.StatusUnprocessableEntity:
+				return oas.SetMyRSVP422JSONResponse{UnprocessableEntityJSONResponse: oas.UnprocessableEntityJSONResponse(oasError(ctx, ae.Code, ae.Message, ae.Details))}, nil
+			default:
+				return nil, err
+			}
+		}
+		return nil, err
+	}
+
+	resp := oas.SetMyRSVPResponse{MyRsvp: myRSVPFromDomain(my)}
+	if s.Idem != nil {
+		respFP := idempotency.Fingerprint{
+			Key:      idempotency.Key(req.Params.IdempotencyKey),
+			Subject:  domain.SubjectID(sub),
+			Method:   http.MethodPut,
+			Route:    "/trips/{tripId}/rsvp",
+			BodyHash: bodyHash,
+		}
+		if b, err := json.Marshal(resp); err == nil {
+			_ = s.Idem.Put(ctx, respFP, idempotency.Record{
+				StatusCode:  http.StatusOK,
+				ContentType: "application/json",
+				Body:        b,
+				CreatedAt:   time.Now().UTC(),
+			})
+		}
+	}
+	return oas.SetMyRSVP200JSONResponse(resp), nil
+}
+
+func (s *Server) GetMyRSVPForTrip(ctx context.Context, req oas.GetMyRSVPForTripRequestObject) (oas.GetMyRSVPForTripResponseObject, error) {
+	sub, ok := SubjectFromContext(ctx)
+	if !ok {
+		return oas.GetMyRSVPForTrip401JSONResponse{UnauthorizedJSONResponse: oas.UnauthorizedJSONResponse(oasError(ctx, "UNAUTHORIZED", "missing subject", nil))}, nil
+	}
+	me, err := s.Members.GetMyMemberProfile(ctx, domain.SubjectID(sub))
+	if err != nil {
+		if isMemberNotProvisioned(err) {
+			return oas.GetMyRSVPForTrip401JSONResponse{UnauthorizedJSONResponse: oas.UnauthorizedJSONResponse(oasError(ctx, "MEMBER_NOT_PROVISIONED", "No member profile exists for the authenticated subject.", nil))}, nil
+		}
+		return nil, err
+	}
+
+	my, err := s.Trips.GetMyRSVPForTrip(ctx, me.ID, domain.TripID(req.TripId))
+	if err != nil {
+		if ae := (*trips.Error)(nil); errors.As(err, &ae) {
+			switch ae.Status {
+			case http.StatusNotFound:
+				return oas.GetMyRSVPForTrip404JSONResponse{NotFoundJSONResponse: oas.NotFoundJSONResponse(oasError(ctx, ae.Code, ae.Message, ae.Details))}, nil
+			case http.StatusConflict:
+				return oas.GetMyRSVPForTrip409JSONResponse{ConflictJSONResponse: oas.ConflictJSONResponse(oasError(ctx, ae.Code, ae.Message, ae.Details))}, nil
+			default:
+				return nil, err
+			}
+		}
+		return nil, err
+	}
+	return oas.GetMyRSVPForTrip200JSONResponse{MyRsvp: myRSVPFromDomain(my)}, nil
+}
+
+func (s *Server) GetTripRSVPSummary(ctx context.Context, req oas.GetTripRSVPSummaryRequestObject) (oas.GetTripRSVPSummaryResponseObject, error) {
+	sub, ok := SubjectFromContext(ctx)
+	if !ok {
+		return oas.GetTripRSVPSummary401JSONResponse{UnauthorizedJSONResponse: oas.UnauthorizedJSONResponse(oasError(ctx, "UNAUTHORIZED", "missing subject", nil))}, nil
+	}
+	me, err := s.Members.GetMyMemberProfile(ctx, domain.SubjectID(sub))
+	if err != nil {
+		if isMemberNotProvisioned(err) {
+			return oas.GetTripRSVPSummary401JSONResponse{UnauthorizedJSONResponse: oas.UnauthorizedJSONResponse(oasError(ctx, "MEMBER_NOT_PROVISIONED", "No member profile exists for the authenticated subject.", nil))}, nil
+		}
+		return nil, err
+	}
+
+	sum, err := s.Trips.GetTripRSVPSummary(ctx, me.ID, domain.TripID(req.TripId))
+	if err != nil {
+		if ae := (*trips.Error)(nil); errors.As(err, &ae) {
+			switch ae.Status {
+			case http.StatusNotFound:
+				return oas.GetTripRSVPSummary404JSONResponse{NotFoundJSONResponse: oas.NotFoundJSONResponse(oasError(ctx, ae.Code, ae.Message, ae.Details))}, nil
+			case http.StatusConflict:
+				return oas.GetTripRSVPSummary409JSONResponse{ConflictJSONResponse: oas.ConflictJSONResponse(oasError(ctx, ae.Code, ae.Message, ae.Details))}, nil
+			default:
+				return nil, err
+			}
+		}
+		return nil, err
+	}
+	return oas.GetTripRSVPSummary200JSONResponse{RsvpSummary: tripRSVPSummaryFromDomain(sum)}, nil
+}
+
 func isMemberNotProvisioned(err error) bool {
 	ae := (*members.Error)(nil)
 	if errors.As(err, &ae) {
@@ -1040,10 +1193,40 @@ func tripDetailsFromDomain(t domain.TripDetails) oas.TripDetails {
 		out.Artifacts = append(out.Artifacts, tripArtifactFromDomain(a))
 	}
 
-	// RSVP fields are introduced in later milestones; omit for now.
-	out.RsvpSummary = nil
-	out.MyRsvp = nil
+	if t.RSVPSummary != nil {
+		v := tripRSVPSummaryFromDomain(*t.RSVPSummary)
+		out.RsvpSummary = &v
+	}
+	if t.MyRSVP != nil {
+		v := myRSVPFromDomain(*t.MyRSVP)
+		out.MyRsvp = &v
+	}
 
+	return out
+}
+
+func myRSVPFromDomain(m domain.MyRSVP) oas.MyRSVP {
+	return oas.MyRSVP{
+		TripId:    string(m.TripID),
+		MemberId:  string(m.MemberID),
+		Response:  oas.RSVPResponse(m.Response),
+		UpdatedAt: m.UpdatedAt,
+	}
+}
+
+func tripRSVPSummaryFromDomain(s domain.TripRSVPSummary) oas.TripRSVPSummary {
+	out := oas.TripRSVPSummary{
+		AttendingRigs:        s.AttendingRigs,
+		AttendingMembers:     make([]oas.MemberSummary, 0, len(s.AttendingMembers)),
+		NotAttendingMembers:  make([]oas.MemberSummary, 0, len(s.NotAttendingMembers)),
+	}
+	out.CapacityRigs = nullableInt(s.CapacityRigs)
+	for _, m := range s.AttendingMembers {
+		out.AttendingMembers = append(out.AttendingMembers, memberSummaryFromDomain(m))
+	}
+	for _, m := range s.NotAttendingMembers {
+		out.NotAttendingMembers = append(out.NotAttendingMembers, memberSummaryFromDomain(m))
+	}
 	return out
 }
 
@@ -1317,6 +1500,21 @@ func hashCancelTripBody(tripID string) (string, error) {
 		TripId string `json:"tripId"`
 	}{
 		TripId: tripID,
+	})
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+func hashSetMyRSVPBody(tripID string, b oas.SetMyRSVPRequest) (string, error) {
+	raw, err := json.Marshal(struct {
+		TripId string            `json:"tripId"`
+		Body   oas.SetMyRSVPRequest `json:"body"`
+	}{
+		TripId: tripID,
+		Body:   b,
 	})
 	if err != nil {
 		return "", err

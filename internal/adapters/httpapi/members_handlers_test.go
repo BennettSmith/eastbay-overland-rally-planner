@@ -11,6 +11,7 @@ import (
 	memclock "eastbay-overland-rally-planner/internal/adapters/memory/clock"
 	memidempotency "eastbay-overland-rally-planner/internal/adapters/memory/idempotency"
 	memmemberrepo "eastbay-overland-rally-planner/internal/adapters/memory/memberrepo"
+	memrsvprepo "eastbay-overland-rally-planner/internal/adapters/memory/rsvprepo"
 	memtriprepo "eastbay-overland-rally-planner/internal/adapters/memory/triprepo"
 	"eastbay-overland-rally-planner/internal/adapters/httpapi/oas"
 	"eastbay-overland-rally-planner/internal/app/members"
@@ -52,7 +53,8 @@ func newTestMemberRouter(t *testing.T) (http.Handler, func(now time.Time, kid st
 	memberSvc := members.NewService(repo, clk)
 
 	tripRepo := memtriprepo.NewRepo()
-	tripSvc := trips.NewService(tripRepo, repo)
+	rsvpRepo := memrsvprepo.NewRepo()
+	tripSvc := trips.NewService(tripRepo, repo, rsvpRepo)
 	api := NewServer(memberSvc, tripSvc, idem)
 	h := NewRouterWithOptions(api, RouterOptions{AuthMiddleware: NewAuthMiddleware(v)})
 

@@ -12,6 +12,7 @@ import (
 	"eastbay-overland-rally-planner/internal/adapters/httpapi"
 	memidempotency "eastbay-overland-rally-planner/internal/adapters/memory/idempotency"
 	memmemberrepo "eastbay-overland-rally-planner/internal/adapters/memory/memberrepo"
+	memrsvprepo "eastbay-overland-rally-planner/internal/adapters/memory/rsvprepo"
 	memtriprepo "eastbay-overland-rally-planner/internal/adapters/memory/triprepo"
 	"eastbay-overland-rally-planner/internal/app/members"
 	"eastbay-overland-rally-planner/internal/app/trips"
@@ -34,9 +35,10 @@ func main() {
 	clk := platformclock.NewSystemClock()
 	memberRepo := memmemberrepo.NewRepo()
 	tripRepo := memtriprepo.NewRepo()
+	rsvpRepo := memrsvprepo.NewRepo()
 	idemStore := memidempotency.NewStore()
 	memberSvc := members.NewService(memberRepo, clk)
-	tripSvc := trips.NewService(tripRepo, memberRepo)
+	tripSvc := trips.NewService(tripRepo, memberRepo, rsvpRepo)
 
 	// Real server implementation for Members; other endpoints remain strict-unimplemented.
 	api := httpapi.NewServer(memberSvc, tripSvc, idemStore)

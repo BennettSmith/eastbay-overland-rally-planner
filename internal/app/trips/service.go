@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -11,20 +12,23 @@ import (
 
 	"eastbay-overland-rally-planner/internal/domain"
 	"eastbay-overland-rally-planner/internal/ports/out/memberrepo"
+	"eastbay-overland-rally-planner/internal/ports/out/rsvprepo"
 	"eastbay-overland-rally-planner/internal/ports/out/triprepo"
 )
 
 type Service struct {
 	trips   triprepo.Repository
 	members memberrepo.Repository
+	rsvps   rsvprepo.Repository
 
 	newTripID func() domain.TripID
 }
 
-func NewService(tripsRepo triprepo.Repository, membersRepo memberrepo.Repository) *Service {
+func NewService(tripsRepo triprepo.Repository, membersRepo memberrepo.Repository, rsvpsRepo rsvprepo.Repository) *Service {
 	return &Service{
 		trips:   tripsRepo,
 		members: membersRepo,
+		rsvps:   rsvpsRepo,
 		newTripID: func() domain.TripID {
 			return domain.TripID(uuid.NewString())
 		},
@@ -87,11 +91,188 @@ func (s *Service) GetTripDetails(ctx context.Context, caller domain.MemberID, tr
 	d.Artifacts = append([]domain.TripArtifact(nil), t.Artifacts...)
 	d.RSVPActionsEnabled = d.Status == domain.TripStatusPublished
 
-	// RSVP fields are added later (Milestone 6); omit for now.
-	d.RSVPSummary = nil
-	d.MyRSVP = nil
+	// RSVP fields:
+	// - available for PUBLISHED and CANCELED (UC-12/13)
+	// - omitted for DRAFT
+	switch d.Status {
+	case domain.TripStatusPublished, domain.TripStatusCanceled:
+		if sum, err := s.tripRSVPSummaryForTrip(ctx, t); err == nil {
+			d.RSVPSummary = &sum
+		} else {
+			return domain.TripDetails{}, err
+		}
+		if my, err := s.myRSVPForTrip(ctx, t, caller); err == nil {
+			d.MyRSVP = &my
+		} else if errors.Is(err, rsvprepo.ErrNotFound) {
+			d.MyRSVP = nil
+		} else {
+			return domain.TripDetails{}, err
+		}
+	default:
+		d.RSVPSummary = nil
+		d.MyRSVP = nil
+	}
 
 	return d, nil
+}
+
+// SetMyRSVP sets the caller's RSVP for a published trip.
+// Implements UC-11.
+func (s *Service) SetMyRSVP(ctx context.Context, caller domain.MemberID, tripID domain.TripID, response domain.RSVPResponse) (domain.MyRSVP, error) {
+	t, err := s.trips.GetByID(ctx, tripID)
+	if err != nil {
+		if errors.Is(err, triprepo.ErrNotFound) {
+			return domain.MyRSVP{}, &Error{Status: 404, Code: "TRIP_NOT_FOUND", Message: "trip not found"}
+		}
+		return domain.MyRSVP{}, err
+	}
+	if !isTripVisibleToCaller(t, caller) {
+		return domain.MyRSVP{}, &Error{Status: 404, Code: "TRIP_NOT_FOUND", Message: "trip not found"}
+	}
+	if t.Status != triprepo.StatusPublished {
+		return domain.MyRSVP{}, &Error{Status: 409, Code: "TRIP_NOT_PUBLISHED", Message: "rsvp is only allowed for published trips"}
+	}
+	if t.CapacityRigs == nil || *t.CapacityRigs < 1 {
+		return domain.MyRSVP{}, &Error{Status: 409, Code: "TRIP_MISSING_CAPACITY", Message: "published trip must have capacity to accept rsvps"}
+	}
+
+	var target rsvprepo.Status
+	switch response {
+	case domain.RSVPResponseYes:
+		target = rsvprepo.StatusYes
+	case domain.RSVPResponseNo:
+		target = rsvprepo.StatusNo
+	case domain.RSVPResponseUnset:
+		target = rsvprepo.StatusUnset
+	default:
+		return domain.MyRSVP{}, &Error{Status: 422, Code: "VALIDATION_ERROR", Message: "invalid response", Details: map[string]any{"response": "must be YES, NO, or UNSET"}}
+	}
+
+	// Load existing RSVP if present.
+	existing, err := s.rsvps.Get(ctx, tripID, caller)
+	hasExisting := true
+	if err != nil {
+		if errors.Is(err, rsvprepo.ErrNotFound) {
+			hasExisting = false
+		} else {
+			return domain.MyRSVP{}, err
+		}
+	}
+
+	// UC-11 A2: setting to the same value is an idempotent no-op (no state change).
+	if hasExisting && existing.Status == target {
+		return domain.MyRSVP{
+			TripID:    tripID,
+			MemberID:  caller,
+			Response:  domain.RSVPResponse(existing.Status),
+			UpdatedAt: existing.UpdatedAt,
+		}, nil
+	}
+
+	// Compute current attendance from RSVP records to avoid drift.
+	curAtt, err := s.rsvps.CountYesByTrip(ctx, tripID)
+	if err != nil {
+		return domain.MyRSVP{}, err
+	}
+
+	// Determine how attendance changes.
+	delta := 0
+	if hasExisting && existing.Status == rsvprepo.StatusYes {
+		if target != rsvprepo.StatusYes {
+			delta = -1
+		}
+	} else {
+		if target == rsvprepo.StatusYes {
+			delta = +1
+		}
+	}
+
+	newAtt := curAtt + delta
+	if newAtt < 0 {
+		newAtt = 0
+	}
+	if target == rsvprepo.StatusYes && newAtt > *t.CapacityRigs {
+		return domain.MyRSVP{}, &Error{Status: 409, Code: "TRIP_AT_CAPACITY", Message: "trip is at capacity"}
+	}
+
+	// Update trip attending rigs (stored on trip for summary projections).
+	tAtt := newAtt
+	t.AttendingRigs = &tAtt
+	t.UpdatedAt = time.Now().UTC()
+	if err := s.trips.Save(ctx, t); err != nil {
+		return domain.MyRSVP{}, err
+	}
+
+	now := time.Now().UTC()
+	rec := rsvprepo.RSVP{
+		TripID:    tripID,
+		MemberID:  caller,
+		Status:    target,
+		UpdatedAt: now,
+	}
+	if err := s.rsvps.Upsert(ctx, rec); err != nil {
+		return domain.MyRSVP{}, err
+	}
+	return domain.MyRSVP{
+		TripID:    tripID,
+		MemberID:  caller,
+		Response:  response,
+		UpdatedAt: now,
+	}, nil
+}
+
+// GetMyRSVPForTrip returns the caller's RSVP for a trip.
+// Implements UC-13.
+func (s *Service) GetMyRSVPForTrip(ctx context.Context, caller domain.MemberID, tripID domain.TripID) (domain.MyRSVP, error) {
+	t, err := s.trips.GetByID(ctx, tripID)
+	if err != nil {
+		if errors.Is(err, triprepo.ErrNotFound) {
+			return domain.MyRSVP{}, &Error{Status: 404, Code: "TRIP_NOT_FOUND", Message: "trip not found"}
+		}
+		return domain.MyRSVP{}, err
+	}
+	if !isTripVisibleToCaller(t, caller) {
+		return domain.MyRSVP{}, &Error{Status: 404, Code: "TRIP_NOT_FOUND", Message: "trip not found"}
+	}
+	if t.Status == triprepo.StatusDraft {
+		return domain.MyRSVP{}, &Error{Status: 409, Code: "RSVP_NOT_AVAILABLE", Message: "rsvp is not available for draft trips"}
+	}
+	rec, err := s.rsvps.Get(ctx, tripID, caller)
+	if err != nil {
+		if errors.Is(err, rsvprepo.ErrNotFound) {
+			return domain.MyRSVP{}, &Error{Status: 404, Code: "RSVP_NOT_FOUND", Message: "rsvp not found"}
+		}
+		return domain.MyRSVP{}, err
+	}
+	return domain.MyRSVP{
+		TripID:    tripID,
+		MemberID:  caller,
+		Response:  domain.RSVPResponse(rec.Status),
+		UpdatedAt: rec.UpdatedAt,
+	}, nil
+}
+
+// GetTripRSVPSummary returns the RSVP summary for a trip.
+// Implements UC-12.
+func (s *Service) GetTripRSVPSummary(ctx context.Context, caller domain.MemberID, tripID domain.TripID) (domain.TripRSVPSummary, error) {
+	t, err := s.trips.GetByID(ctx, tripID)
+	if err != nil {
+		if errors.Is(err, triprepo.ErrNotFound) {
+			return domain.TripRSVPSummary{}, &Error{Status: 404, Code: "TRIP_NOT_FOUND", Message: "trip not found"}
+		}
+		return domain.TripRSVPSummary{}, err
+	}
+	if !isTripVisibleToCaller(t, caller) {
+		return domain.TripRSVPSummary{}, &Error{Status: 404, Code: "TRIP_NOT_FOUND", Message: "trip not found"}
+	}
+	if t.Status == triprepo.StatusDraft {
+		return domain.TripRSVPSummary{}, &Error{Status: 409, Code: "RSVP_NOT_AVAILABLE", Message: "rsvp summary is not available for draft trips"}
+	}
+	sum, err := s.tripRSVPSummaryForTrip(ctx, t)
+	if err != nil {
+		return domain.TripRSVPSummary{}, err
+	}
+	return sum, nil
 }
 
 func (s *Service) CreateTripDraft(ctx context.Context, caller domain.MemberID, in CreateTripDraftInput) (TripCreated, error) {
@@ -550,9 +731,98 @@ func (s *Service) tripDetailsForTrip(ctx context.Context, t triprepo.Trip) (doma
 	d.Organizers = orgs
 	d.Artifacts = append([]domain.TripArtifact(nil), t.Artifacts...)
 	d.RSVPActionsEnabled = d.Status == domain.TripStatusPublished
-	d.RSVPSummary = nil
-	d.MyRSVP = nil
+
+	switch d.Status {
+	case domain.TripStatusPublished, domain.TripStatusCanceled:
+		if sum, err := s.tripRSVPSummaryForTrip(ctx, t); err == nil {
+			d.RSVPSummary = &sum
+		} else {
+			return domain.TripDetails{}, err
+		}
+		// No caller context here; omit myRsvp.
+		d.MyRSVP = nil
+	default:
+		d.RSVPSummary = nil
+		d.MyRSVP = nil
+	}
 	return d, nil
+}
+
+func (s *Service) myRSVPForTrip(ctx context.Context, t triprepo.Trip, caller domain.MemberID) (domain.MyRSVP, error) {
+	rec, err := s.rsvps.Get(ctx, t.ID, caller)
+	if err != nil {
+		return domain.MyRSVP{}, err
+	}
+	return domain.MyRSVP{
+		TripID:    t.ID,
+		MemberID:  caller,
+		Response:  domain.RSVPResponse(rec.Status),
+		UpdatedAt: rec.UpdatedAt,
+	}, nil
+}
+
+func (s *Service) tripRSVPSummaryForTrip(ctx context.Context, t triprepo.Trip) (domain.TripRSVPSummary, error) {
+	recs, err := s.rsvps.ListByTrip(ctx, t.ID)
+	if err != nil {
+		return domain.TripRSVPSummary{}, err
+	}
+
+	yesIDs := make([]domain.MemberID, 0)
+	noIDs := make([]domain.MemberID, 0)
+	for _, r := range recs {
+		switch r.Status {
+		case rsvprepo.StatusYes:
+			yesIDs = append(yesIDs, r.MemberID)
+		case rsvprepo.StatusNo:
+			noIDs = append(noIDs, r.MemberID)
+		default:
+			// UNSET omitted
+		}
+	}
+
+	yesMembers, err := s.loadMemberSummariesSorted(ctx, yesIDs)
+	if err != nil {
+		return domain.TripRSVPSummary{}, err
+	}
+	noMembers, err := s.loadMemberSummariesSorted(ctx, noIDs)
+	if err != nil {
+		return domain.TripRSVPSummary{}, err
+	}
+
+	return domain.TripRSVPSummary{
+		CapacityRigs: cloneIntPtr(t.CapacityRigs),
+		AttendingRigs: len(yesMembers),
+		AttendingMembers: yesMembers,
+		NotAttendingMembers: noMembers,
+	}, nil
+}
+
+func (s *Service) loadMemberSummariesSorted(ctx context.Context, ids []domain.MemberID) ([]domain.MemberSummary, error) {
+	if len(ids) == 0 {
+		return []domain.MemberSummary{}, nil
+	}
+	out := make([]domain.MemberSummary, 0, len(ids))
+	for _, id := range ids {
+		m, err := s.members.GetByID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, domain.MemberSummary{
+			ID:             m.ID,
+			DisplayName:    m.DisplayName,
+			Email:          m.Email,
+			GroupAliasEmail: cloneStringPtr(m.GroupAliasEmail),
+		})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		di := strings.ToLower(out[i].DisplayName)
+		dj := strings.ToLower(out[j].DisplayName)
+		if di == dj {
+			return string(out[i].ID) < string(out[j].ID)
+		}
+		return di < dj
+	})
+	return out, nil
 }
 
 func applyLocationPatch(existing *domain.Location, patch *LocationPatch) *domain.Location {
@@ -716,7 +986,13 @@ func toDomainSummary(t triprepo.Trip) domain.TripSummary {
 		EndDate:   cloneTimePtr(t.EndDate),
 
 		CapacityRigs:  cloneIntPtr(t.CapacityRigs),
-		AttendingRigs: cloneIntPtr(t.AttendingRigs),
+	}
+
+	// Attending rigs is present only for published trips per OpenAPI schema.
+	if t.Status == triprepo.StatusPublished {
+		out.AttendingRigs = cloneIntPtr(t.AttendingRigs)
+	} else {
+		out.AttendingRigs = nil
 	}
 
 	if t.Status == triprepo.StatusDraft {
