@@ -104,22 +104,22 @@ Acceptance criteria:
 
 **Goal**: Stand up the HTTP layer “for real” (generated strict handlers, middleware, consistent errors), still backed by stub/in-memory app services.
 
-- [ ] Implement **auth middleware** for `bearerAuth` (real JWT verification)
+- [x] Implement **auth middleware** for `bearerAuth` (real JWT verification)
   - Extract `Authorization: Bearer ...`
   - Verify signature (JWKS)
   - Validate claims (`iss`, `aud`, `exp`; optionally `nbf`)
   - Populate request context with `subjectID` (from `sub`)
   - Return OpenAPI-shaped `401` error on failure
-- [ ] Add auth configuration in `internal/platform/config` (or equivalent)
+- [x] Add auth configuration in `internal/platform/config` (or equivalent)
   - `JWT_ISSUER` (required)
   - `JWT_AUDIENCE` (required)
   - `JWT_JWKS_URL` (required)
   - Timeouts and caching: `JWT_JWKS_REFRESH_INTERVAL`, `JWT_JWKS_MIN_REFRESH_INTERVAL`, `JWT_CLOCK_SKEW` (names TBD)
-- [ ] Add JWKS caching + rotation behavior
+- [x] Add JWKS caching + rotation behavior
   - Cache keys in-memory
   - Refresh on interval, and on unknown `kid` (bounded to avoid thundering herd)
   - Fail closed (401) when verification cannot be performed
-- [ ] TDD for auth middleware
+- [x] TDD for auth middleware
   - Missing header → 401
   - Malformed `Authorization` → 401
   - Token with bad signature → 401
@@ -128,16 +128,16 @@ Acceptance criteria:
   - Valid token → request proceeds; `subjectID` present in context
   - JWKS rotates keys → old `kid` rejected, new accepted after refresh
   - Tests run without external dependencies by using an in-test JWKS server (`httptest`) serving a generated public key set
-- [ ] Define a small **HTTP request context** helper in `internal/adapters/httpapi` (e.g., `SubjectFromContext(ctx)`)
-- [ ] Define **error mapping** conventions:
+- [x] Define a small **HTTP request context** helper in `internal/adapters/httpapi` (e.g., `SubjectFromContext(ctx)`)
+- [x] Define **error mapping** conventions:
   - application/domain error → OpenAPI `ErrorResponse` (`code`, `message`, optional `details`, `requestId`)
   - map “not found/validation/conflict/unauthorized” consistently
-- [ ] Implement **health** endpoints policy:
+- [x] Implement **health** endpoints policy:
   - keep `/healthz` out-of-spec (already exists) for infra checks
   - (optional) add `/readyz` if we want readiness checks later (DB connectivity, etc.)
-- [ ] Replace `oas.Unimplemented{}` in `cmd/api/main.go` with a real server implementation that:
-  - delegates into the application layer (still using in-memory adapters)
-  - returns JSON responses matching the spec
+- [x] Replace `oas.Unimplemented{}` in `cmd/api/main.go` with real server wiring using `httpapi.StrictUnimplemented{}` behind a “real” HTTP layer (auth + OpenAPI error shaping)
+  - still backed by a strict stub implementation (business logic comes in later milestones)
+  - returns OpenAPI-shaped JSON errors (and “not implemented” where expected)
 
 Acceptance criteria:
 - A protected endpoint returns `401` when auth header is missing.

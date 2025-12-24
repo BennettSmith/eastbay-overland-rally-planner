@@ -10,13 +10,26 @@ import (
 	"time"
 
 	"eastbay-overland-rally-planner/internal/adapters/httpapi"
+	"eastbay-overland-rally-planner/internal/platform/auth/jwtverifier"
+	"eastbay-overland-rally-planner/internal/platform/config"
 )
 
 func main() {
 	port := getenv("PORT", "8080")
 
-	// Temporary strict-server stub (we'll swap this out once app services exist).
-	handler := httpapi.NewRouter(httpapi.StrictUnimplemented{})
+	jwtCfg, err := config.LoadJWTConfigFromEnv()
+	if err != nil {
+		log.Fatalf("invalid auth config: %v", err)
+	}
+	verifier := jwtverifier.New(jwtCfg)
+	authMW := httpapi.NewAuthMiddleware(verifier)
+
+	// Temporary strict-server stub (we'll swap this out once app services exist),
+	// but the HTTP layer is already "real" (auth + error shaping).
+	handler := httpapi.NewRouterWithOptions(
+		httpapi.StrictUnimplemented{},
+		httpapi.RouterOptions{AuthMiddleware: authMW},
+	)
 
 	srv := &http.Server{
 		Addr:              ":" + port,
