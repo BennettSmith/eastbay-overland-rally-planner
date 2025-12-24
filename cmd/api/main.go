@@ -8,20 +8,19 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"eastbay-overland-rally-planner/internal/adapters/httpapi"
+	"eastbay-overland-rally-planner/internal/adapters/httpapi/oas"
 )
 
 func main() {
 	port := getenv("PORT", "8080")
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
-	})
+	handler := httpapi.NewRouter(oas.Unimplemented{})
 
 	srv := &http.Server{
 		Addr:              ":" + port,
-		Handler:           mux,
+		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

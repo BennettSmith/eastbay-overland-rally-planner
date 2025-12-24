@@ -105,3 +105,18 @@ db-seed: db-migrate
 db-reset: db-drop db-create db-migrate db-seed
 	@echo "Reset complete: $(POSTGRES_DB) on localhost:$(POSTGRES_PORT)"
 
+# --- Go / OpenAPI helpers ---
+#
+# Generates Go server stubs + types from ./openapi.yaml.
+# - Uses oapi-codegen (Go-native generator)
+# - Targets net/http + chi (but keeps generated code isolated in a package you can adapt from)
+#
+# Note: pin the oapi-codegen version once you settle on it; `@latest` is convenient early on.
+.PHONY: gen-openapi
+gen-openapi:
+	@go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.5.1 \
+		-generate types,chi-server \
+		-package oas \
+		-o internal/adapters/httpapi/oas/api.gen.go \
+		openapi.yaml
+
