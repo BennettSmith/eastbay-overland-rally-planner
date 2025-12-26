@@ -8,8 +8,10 @@ This repo uses:
 
 ## Diagrams
 
-- **Domain model (v1)**: `docs/diagrams/domain-model.md`
-- **Database schema (v1)**: `docs/diagrams/database-schema.md`
+The diagrams + use-case specs live in the spec repo:
+
+- **Domain model (v1)**: `../ebo-planner-spec/docs/diagrams/domain-model.md`
+- **Database schema (v1)**: `../ebo-planner-spec/docs/diagrams/database-schema.md`
 
 ## Local dev (DB + API)
 
@@ -250,7 +252,9 @@ postgres://eb:eb@localhost:5432/eastbay?sslmode=disable
 
 ## Fast dev loop (spec-first)
 
-OpenAPI is the source of truth (`openapi.yaml`). Regenerate server glue, format, and run tests:
+OpenAPI is the source of truth (default: `../ebo-planner-spec/openapi.yaml`).
+
+Regenerate server glue, format, and run tests:
 
 ```bash
 make gen-openapi

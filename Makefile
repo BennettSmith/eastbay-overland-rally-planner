@@ -17,6 +17,14 @@
 
 SHELL := /bin/bash
 
+# --- Spec repo location (OpenAPI + use cases live there) ---
+# Default assumes the spec repo sits next to this backend repo:
+#   eastbay-overland/
+#     ebo-planner-spec/
+#     ebo-planner-backend/
+EBO_SPEC_DIR ?= ../ebo-planner-spec
+OPENAPI_SPEC ?= $(EBO_SPEC_DIR)/openapi.yaml
+
 # Keep these defaults aligned with docker-compose.yml (so "make up" works out of the box).
 POSTGRES_USER ?= eb
 POSTGRES_PASSWORD ?= eb
@@ -224,16 +232,17 @@ db-reset: db-drop db-create db-migrate db-seed
 
 # --- Go / OpenAPI helpers ---
 #
-# Generates Go server stubs + types from ./openapi.yaml.
+# Generates Go server stubs + types from the OpenAPI spec (default: ../ebo-planner-spec/openapi.yaml).
 # - Uses oapi-codegen (Go-native generator)
 # - Targets net/http + chi (but keeps generated code isolated in a package you can adapt from)
 #
 # Note: pin the oapi-codegen version once you settle on it; `@latest` is convenient early on.
 .PHONY: gen-openapi
 gen-openapi:
+	@test -f "$(OPENAPI_SPEC)" || (echo "OpenAPI spec not found: $(OPENAPI_SPEC) (set EBO_SPEC_DIR=... to override)"; exit 1)
 	@go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.5.1 \
 		-config oapi-codegen.yaml \
-		openapi.yaml
+		"$(OPENAPI_SPEC)"
 
 # --- Go quality-of-life targets (Milestone 0) ---
 
