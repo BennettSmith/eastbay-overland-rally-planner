@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"ebo-planner-backend/internal/platform/config"
+	"github.com/BennettSmith/ebo-planner-backend/internal/platform/config"
 )
 
 var (

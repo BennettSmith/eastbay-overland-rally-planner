@@ -3,7 +3,7 @@ package trips
 import (
 	"time"
 
-	"ebo-planner-backend/internal/domain"
+	"github.com/BennettSmith/ebo-planner-backend/internal/domain"
 )
 
 // Optional is a tri-state field used to distinguish:

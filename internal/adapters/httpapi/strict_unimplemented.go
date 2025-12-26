@@ -3,7 +3,7 @@ package httpapi
 import (
 	"context"
 
-	"ebo-planner-backend/internal/adapters/httpapi/oas"
+	"github.com/BennettSmith/ebo-planner-backend/internal/adapters/httpapi/oas"
 )
 
 // StrictUnimplemented is a temporary strict-server implementation used to keep the

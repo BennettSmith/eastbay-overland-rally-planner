@@ -5,8 +5,8 @@ import (
 	"sort"
 	"sync"
 
-	"ebo-planner-backend/internal/domain"
-	"ebo-planner-backend/internal/ports/out/rsvprepo"
+	"github.com/BennettSmith/ebo-planner-backend/internal/domain"
+	"github.com/BennettSmith/ebo-planner-backend/internal/ports/out/rsvprepo"
 )
 
 type key struct {

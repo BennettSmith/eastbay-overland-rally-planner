@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"ebo-planner-backend/internal/adapters/httpapi/oas"
-	"ebo-planner-backend/internal/platform/auth/jwks_testutil"
-	"ebo-planner-backend/internal/platform/auth/jwtverifier"
-	"ebo-planner-backend/internal/platform/config"
+	"github.com/BennettSmith/ebo-planner-backend/internal/adapters/httpapi/oas"
+	"github.com/BennettSmith/ebo-planner-backend/internal/platform/auth/jwks_testutil"
+	"github.com/BennettSmith/ebo-planner-backend/internal/platform/auth/jwtverifier"
+	"github.com/BennettSmith/ebo-planner-backend/internal/platform/config"
 )
 
 type fixedClock struct{ t time.Time }

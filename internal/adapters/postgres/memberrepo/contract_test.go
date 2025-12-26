@@ -3,9 +3,9 @@ package memberrepo
 import (
 	"testing"
 
-	"ebo-planner-backend/internal/adapters/contracttest"
-	"ebo-planner-backend/internal/adapters/postgres/testutil"
-	memberrepoport "ebo-planner-backend/internal/ports/out/memberrepo"
+	"github.com/BennettSmith/ebo-planner-backend/internal/adapters/contracttest"
+	"github.com/BennettSmith/ebo-planner-backend/internal/adapters/postgres/testutil"
+	memberrepoport "github.com/BennettSmith/ebo-planner-backend/internal/ports/out/memberrepo"
 )
 
 func TestContract_PostgresMemberRepo(t *testing.T) {

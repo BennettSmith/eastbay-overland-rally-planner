@@ -8,17 +8,17 @@ import (
 	"testing"
 	"time"
 
-	"ebo-planner-backend/internal/adapters/httpapi/oas"
-	memclock "ebo-planner-backend/internal/adapters/memory/clock"
-	memidempotency "ebo-planner-backend/internal/adapters/memory/idempotency"
-	memmemberrepo "ebo-planner-backend/internal/adapters/memory/memberrepo"
-	memrsvprepo "ebo-planner-backend/internal/adapters/memory/rsvprepo"
-	memtriprepo "ebo-planner-backend/internal/adapters/memory/triprepo"
-	"ebo-planner-backend/internal/app/members"
-	"ebo-planner-backend/internal/app/trips"
-	"ebo-planner-backend/internal/platform/auth/jwks_testutil"
-	"ebo-planner-backend/internal/platform/auth/jwtverifier"
-	"ebo-planner-backend/internal/platform/config"
+	"github.com/BennettSmith/ebo-planner-backend/internal/adapters/httpapi/oas"
+	memclock "github.com/BennettSmith/ebo-planner-backend/internal/adapters/memory/clock"
+	memidempotency "github.com/BennettSmith/ebo-planner-backend/internal/adapters/memory/idempotency"
+	memmemberrepo "github.com/BennettSmith/ebo-planner-backend/internal/adapters/memory/memberrepo"
+	memrsvprepo "github.com/BennettSmith/ebo-planner-backend/internal/adapters/memory/rsvprepo"
+	memtriprepo "github.com/BennettSmith/ebo-planner-backend/internal/adapters/memory/triprepo"
+	"github.com/BennettSmith/ebo-planner-backend/internal/app/members"
+	"github.com/BennettSmith/ebo-planner-backend/internal/app/trips"
+	"github.com/BennettSmith/ebo-planner-backend/internal/platform/auth/jwks_testutil"
+	"github.com/BennettSmith/ebo-planner-backend/internal/platform/auth/jwtverifier"
+	"github.com/BennettSmith/ebo-planner-backend/internal/platform/config"
 )
 
 type fixedClockMembers struct{ t time.Time }

@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"ebo-planner-backend/internal/domain"
-	"ebo-planner-backend/internal/ports/out/rsvprepo"
+	"github.com/BennettSmith/ebo-planner-backend/internal/domain"
+	"github.com/BennettSmith/ebo-planner-backend/internal/ports/out/rsvprepo"
 )
 
 func TestRepo_GetUpsertCountYesList(t *testing.T) {

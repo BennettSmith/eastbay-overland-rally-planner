@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"ebo-planner-backend/internal/domain"
-	"ebo-planner-backend/internal/ports/out/triprepo"
+	"github.com/BennettSmith/ebo-planner-backend/internal/domain"
+	"github.com/BennettSmith/ebo-planner-backend/internal/ports/out/triprepo"
 )
 
 // Repo is an in-memory implementation of triprepo.Repository.

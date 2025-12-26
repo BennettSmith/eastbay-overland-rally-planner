@@ -3,12 +3,12 @@ package triprepo
 import (
 	"testing"
 
-	"ebo-planner-backend/internal/adapters/contracttest"
-	memmemberrepo "ebo-planner-backend/internal/adapters/memory/memberrepo"
-	memrsvprepo "ebo-planner-backend/internal/adapters/memory/rsvprepo"
-	memberrepoport "ebo-planner-backend/internal/ports/out/memberrepo"
-	rsvprepoport "ebo-planner-backend/internal/ports/out/rsvprepo"
-	triprepoport "ebo-planner-backend/internal/ports/out/triprepo"
+	"github.com/BennettSmith/ebo-planner-backend/internal/adapters/contracttest"
+	memmemberrepo "github.com/BennettSmith/ebo-planner-backend/internal/adapters/memory/memberrepo"
+	memrsvprepo "github.com/BennettSmith/ebo-planner-backend/internal/adapters/memory/rsvprepo"
+	memberrepoport "github.com/BennettSmith/ebo-planner-backend/internal/ports/out/memberrepo"
+	rsvprepoport "github.com/BennettSmith/ebo-planner-backend/internal/ports/out/rsvprepo"
+	triprepoport "github.com/BennettSmith/ebo-planner-backend/internal/ports/out/triprepo"
 )
 
 func TestContract_TripAndRSVPRepos(t *testing.T) {

@@ -14,11 +14,11 @@ import (
 	"github.com/oapi-codegen/nullable"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
-	"ebo-planner-backend/internal/adapters/httpapi/oas"
-	"ebo-planner-backend/internal/app/members"
-	"ebo-planner-backend/internal/app/trips"
-	"ebo-planner-backend/internal/domain"
-	"ebo-planner-backend/internal/ports/out/idempotency"
+	"github.com/BennettSmith/ebo-planner-backend/internal/adapters/httpapi/oas"
+	"github.com/BennettSmith/ebo-planner-backend/internal/app/members"
+	"github.com/BennettSmith/ebo-planner-backend/internal/app/trips"
+	"github.com/BennettSmith/ebo-planner-backend/internal/domain"
+	"github.com/BennettSmith/ebo-planner-backend/internal/ports/out/idempotency"
 )
 
 // Server is the real HTTP adapter implementation. For endpoints not yet implemented,

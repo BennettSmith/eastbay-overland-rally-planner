@@ -10,10 +10,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"ebo-planner-backend/internal/domain"
-	"ebo-planner-backend/internal/ports/out/memberrepo"
-	"ebo-planner-backend/internal/ports/out/rsvprepo"
-	"ebo-planner-backend/internal/ports/out/triprepo"
+	"github.com/BennettSmith/ebo-planner-backend/internal/domain"
+	"github.com/BennettSmith/ebo-planner-backend/internal/ports/out/memberrepo"
+	"github.com/BennettSmith/ebo-planner-backend/internal/ports/out/rsvprepo"
+	"github.com/BennettSmith/ebo-planner-backend/internal/ports/out/triprepo"
 )
 
 type Service struct {

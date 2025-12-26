@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"ebo-planner-backend/internal/domain"
+	"github.com/BennettSmith/ebo-planner-backend/internal/domain"
 )
 
 // Key is the caller-provided idempotency key (Idempotency-Key header).

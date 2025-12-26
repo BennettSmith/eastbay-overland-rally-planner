@@ -6,14 +6,14 @@ import (
 	"testing"
 	"time"
 
-	memmemberrepo "ebo-planner-backend/internal/adapters/memory/memberrepo"
-	memrsvprepo "ebo-planner-backend/internal/adapters/memory/rsvprepo"
-	memtriprepo "ebo-planner-backend/internal/adapters/memory/triprepo"
-	"ebo-planner-backend/internal/app/trips"
-	"ebo-planner-backend/internal/domain"
-	portmemberrepo "ebo-planner-backend/internal/ports/out/memberrepo"
-	portrsvprepo "ebo-planner-backend/internal/ports/out/rsvprepo"
-	porttriprepo "ebo-planner-backend/internal/ports/out/triprepo"
+	memmemberrepo "github.com/BennettSmith/ebo-planner-backend/internal/adapters/memory/memberrepo"
+	memrsvprepo "github.com/BennettSmith/ebo-planner-backend/internal/adapters/memory/rsvprepo"
+	memtriprepo "github.com/BennettSmith/ebo-planner-backend/internal/adapters/memory/triprepo"
+	"github.com/BennettSmith/ebo-planner-backend/internal/app/trips"
+	"github.com/BennettSmith/ebo-planner-backend/internal/domain"
+	portmemberrepo "github.com/BennettSmith/ebo-planner-backend/internal/ports/out/memberrepo"
+	portrsvprepo "github.com/BennettSmith/ebo-planner-backend/internal/ports/out/rsvprepo"
+	porttriprepo "github.com/BennettSmith/ebo-planner-backend/internal/ports/out/triprepo"
 )
 
 func provisionMember(t *testing.T, repo *memmemberrepo.Repo, id domain.MemberID) {

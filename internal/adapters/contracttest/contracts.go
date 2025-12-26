@@ -7,11 +7,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"ebo-planner-backend/internal/domain"
-	idempotencyport "ebo-planner-backend/internal/ports/out/idempotency"
-	memberrepoport "ebo-planner-backend/internal/ports/out/memberrepo"
-	rsvprepoport "ebo-planner-backend/internal/ports/out/rsvprepo"
-	triprepoport "ebo-planner-backend/internal/ports/out/triprepo"
+	"github.com/BennettSmith/ebo-planner-backend/internal/domain"
+	idempotencyport "github.com/BennettSmith/ebo-planner-backend/internal/ports/out/idempotency"
+	memberrepoport "github.com/BennettSmith/ebo-planner-backend/internal/ports/out/memberrepo"
+	rsvprepoport "github.com/BennettSmith/ebo-planner-backend/internal/ports/out/rsvprepo"
+	triprepoport "github.com/BennettSmith/ebo-planner-backend/internal/ports/out/triprepo"
 )
 
 type CleanupFunc = func()

@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"ebo-planner-backend/internal/platform/auth/jwtverifier"
+	"github.com/BennettSmith/ebo-planner-backend/internal/platform/auth/jwtverifier"
 )
 
 // NewAuthMiddleware enforces Authorization: Bearer <JWT> for all in-spec endpoints.

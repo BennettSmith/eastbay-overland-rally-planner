@@ -1,4 +1,4 @@
-module ebo-planner-backend
+module github.com/BennettSmith/ebo-planner-backend
 
 go 1.23.0
 

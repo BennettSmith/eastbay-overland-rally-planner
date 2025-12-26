@@ -9,9 +9,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"ebo-planner-backend/internal/domain"
-	clockport "ebo-planner-backend/internal/ports/out/clock"
-	"ebo-planner-backend/internal/ports/out/memberrepo"
+	"github.com/BennettSmith/ebo-planner-backend/internal/domain"
+	clockport "github.com/BennettSmith/ebo-planner-backend/internal/ports/out/clock"
+	"github.com/BennettSmith/ebo-planner-backend/internal/ports/out/memberrepo"
 )
 
 type Service struct {

@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	memclock "ebo-planner-backend/internal/adapters/memory/clock"
-	memmemberrepo "ebo-planner-backend/internal/adapters/memory/memberrepo"
-	"ebo-planner-backend/internal/domain"
+	memclock "github.com/BennettSmith/ebo-planner-backend/internal/adapters/memory/clock"
+	memmemberrepo "github.com/BennettSmith/ebo-planner-backend/internal/adapters/memory/memberrepo"
+	"github.com/BennettSmith/ebo-planner-backend/internal/domain"
 )
 
 func TestService_GetMyMemberProfile_NotProvisioned(t *testing.T) {

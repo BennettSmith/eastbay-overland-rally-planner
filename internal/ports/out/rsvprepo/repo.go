@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"ebo-planner-backend/internal/domain"
+	"github.com/BennettSmith/ebo-planner-backend/internal/domain"
 )
 
 type Status string

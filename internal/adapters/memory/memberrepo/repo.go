@@ -6,8 +6,8 @@ import (
 	"strings"
 	"sync"
 
-	"ebo-planner-backend/internal/domain"
-	"ebo-planner-backend/internal/ports/out/memberrepo"
+	"github.com/BennettSmith/ebo-planner-backend/internal/domain"
+	"github.com/BennettSmith/ebo-planner-backend/internal/ports/out/memberrepo"
 )
 
 // Repo is an in-memory implementation of memberrepo.Repository.

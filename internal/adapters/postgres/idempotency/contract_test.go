@@ -3,9 +3,9 @@ package idempotency
 import (
 	"testing"
 
-	"ebo-planner-backend/internal/adapters/contracttest"
-	"ebo-planner-backend/internal/adapters/postgres/testutil"
-	idempotencyport "ebo-planner-backend/internal/ports/out/idempotency"
+	"github.com/BennettSmith/ebo-planner-backend/internal/adapters/contracttest"
+	"github.com/BennettSmith/ebo-planner-backend/internal/adapters/postgres/testutil"
+	idempotencyport "github.com/BennettSmith/ebo-planner-backend/internal/ports/out/idempotency"
 )
 
 func TestContract_PostgresIdempotencyStore(t *testing.T) {

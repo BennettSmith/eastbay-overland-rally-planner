@@ -3,13 +3,13 @@ package triprepo
 import (
 	"testing"
 
-	"ebo-planner-backend/internal/adapters/contracttest"
-	"ebo-planner-backend/internal/adapters/postgres/memberrepo"
-	"ebo-planner-backend/internal/adapters/postgres/rsvprepo"
-	"ebo-planner-backend/internal/adapters/postgres/testutil"
-	memberrepoport "ebo-planner-backend/internal/ports/out/memberrepo"
-	rsvprepoport "ebo-planner-backend/internal/ports/out/rsvprepo"
-	triprepoport "ebo-planner-backend/internal/ports/out/triprepo"
+	"github.com/BennettSmith/ebo-planner-backend/internal/adapters/contracttest"
+	"github.com/BennettSmith/ebo-planner-backend/internal/adapters/postgres/memberrepo"
+	"github.com/BennettSmith/ebo-planner-backend/internal/adapters/postgres/rsvprepo"
+	"github.com/BennettSmith/ebo-planner-backend/internal/adapters/postgres/testutil"
+	memberrepoport "github.com/BennettSmith/ebo-planner-backend/internal/ports/out/memberrepo"
+	rsvprepoport "github.com/BennettSmith/ebo-planner-backend/internal/ports/out/rsvprepo"
+	triprepoport "github.com/BennettSmith/ebo-planner-backend/internal/ports/out/triprepo"
 )
 
 func TestContract_PostgresTripAndRSVPRepos(t *testing.T) {
