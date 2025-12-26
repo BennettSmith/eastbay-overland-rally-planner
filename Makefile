@@ -111,7 +111,11 @@ help:
 	@echo "  image-run      Run the API Docker image (no compose; requires DATABASE_URL reachable)"
 	@echo ""
 	@echo "  fmt            Run gofmt on all .go files"
+	@echo "  fmt-check      Fail if gofmt would change files"
+	@echo "  vet            Run go vet (./...)"
 	@echo "  test           Run Go unit tests (./...)"
+	@echo "  build          Compile all packages (./...)"
+	@echo "  ci             Run the repo's 'green' gate (format-check + vet + tests + build + changelog/spec.lock)"
 	@echo "  itest          Run HTTP API integration tests (memory backend)"
 	@echo "  itest-postgres Run HTTP API integration tests (postgres backend; requires db)"
 	@echo "  itest-all      Run HTTP API integration tests (all backends)"
@@ -261,14 +265,36 @@ PKGS ?= ./...
 COVERPROFILE ?= coverage.out
 COVERHTML ?= coverage.html
 
+.PHONY: fmt-check
+fmt-check:
+	@echo "gofmt (check)..."
+	@unformatted="$$(gofmt -l $$(find . -name '*.go' -not -path './vendor/*'))"; \
+	if [ -n "$$unformatted" ]; then \
+		echo "ERROR: gofmt needed on:" >&2; \
+		echo "$$unformatted" >&2; \
+		echo "Fix: run 'make fmt'" >&2; \
+		exit 1; \
+	fi
+
 .PHONY: fmt
 fmt:
 	@echo "gofmt..."
 	@gofmt -w $$(find . -name '*.go' -not -path './vendor/*')
 
+.PHONY: vet
+vet:
+	@$(GO) vet $(PKGS)
+
 .PHONY: test
 test:
 	@$(GO) test $(PKGS)
+
+.PHONY: build
+build:
+	@$(GO) build $(PKGS)
+
+.PHONY: ci
+ci: changelog-verify fmt-check vet test build
 
 .PHONY: itest
 itest:
