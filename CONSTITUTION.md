@@ -105,7 +105,15 @@ When opening an implementation PR that changes externally visible behavior, link
 
 ### 6.1.4 Automation via `gh`
 
-- Cursor agents SHOULD use the GitHub CLI (`gh`) to create PRs, set titles/descriptions, and enable auto-merge once checks pass.
+- Cursor agents SHOULD use the GitHub CLI (`gh`) to create PRs and set titles/descriptions.
+- Cursor agents MUST enable auto-merge using **squash** for routine changes (so PRs merge automatically once required checks/reviews are satisfied).
+
+Example:
+
+```bash
+gh pr create --fill
+gh pr merge --auto --squash
+```
 
 ## 7. Versioning & releases
 
