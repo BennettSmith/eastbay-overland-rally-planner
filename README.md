@@ -75,6 +75,7 @@ You can run Keycloak locally via docker compose (recommended) or run it elsewher
 This repo includes a `keycloak` compose service (disabled by default) and a small realm import:
 - Realm: `ebo`
 - Client: `ebo-api` (direct access grants enabled; auth code flow enabled for Postman)
+- Client: `ebo-client` (OAuth 2.0 Device Authorization Grant enabled; for `ebo-planner-cli` interactive login)
 - User: `alice` / password: `alice`
 
 Start the stack with Keycloak + JWT auth:
