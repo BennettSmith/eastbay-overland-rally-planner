@@ -107,6 +107,7 @@ When opening an implementation PR that changes externally visible behavior, link
 
 - Cursor agents SHOULD use the GitHub CLI (`gh`) to create PRs and set titles/descriptions.
 - Cursor agents MUST enable auto-merge using **squash** for routine changes (so PRs merge automatically once required checks/reviews are satisfied).
+- When posting **multi-line PR comments** via `gh`, you MUST use `--body-file` (or `--edit-last --body-file`) rather than passing escaped newlines in `--body`. This ensures GitHub renders Markdown correctly and avoids posting literal `\n` sequences.
 
 Example:
 
