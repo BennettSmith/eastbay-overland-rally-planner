@@ -63,6 +63,37 @@ func (r *Repo) ListByTrip(ctx context.Context, tripID domain.TripID) ([]rsvprepo
 	return out, nil
 }
 
+func (r *Repo) ListByMember(ctx context.Context, memberID domain.MemberID) ([]rsvprepo.RSVP, error) {
+	_ = ctx
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]rsvprepo.RSVP, 0)
+	for k, v := range r.m {
+		if k.memberID == memberID {
+			out = append(out, v)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].TripID == out[j].TripID {
+			return out[i].UpdatedAt.Before(out[j].UpdatedAt)
+		}
+		return string(out[i].TripID) < string(out[j].TripID)
+	})
+	return out, nil
+}
+
+func (r *Repo) DeleteByMember(ctx context.Context, memberID domain.MemberID) error {
+	_ = ctx
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for k := range r.m {
+		if k.memberID == memberID {
+			delete(r.m, k)
+		}
+	}
+	return nil
+}
+
 func (r *Repo) CountYesByTrip(ctx context.Context, tripID domain.TripID) (int, error) {
 	_ = ctx
 	r.mu.RLock()
