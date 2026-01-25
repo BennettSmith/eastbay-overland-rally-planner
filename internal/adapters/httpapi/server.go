@@ -269,6 +269,108 @@ func (s *Server) UpdateMyMemberProfile(ctx context.Context, req oas.UpdateMyMemb
 	return oas.UpdateMyMemberProfile200JSONResponse(resp), nil
 }
 
+func (s *Server) DeleteMyMemberAccount(ctx context.Context, req oas.DeleteMyMemberAccountRequestObject) (oas.DeleteMyMemberAccountResponseObject, error) {
+	sub, ok := SubjectFromContext(ctx)
+	if !ok {
+		return oas.DeleteMyMemberAccount401JSONResponse{UnauthorizedJSONResponse: oas.UnauthorizedJSONResponse(oasError(ctx, "UNAUTHORIZED", "missing subject", nil))}, nil
+	}
+	if req.Body == nil {
+		return oas.DeleteMyMemberAccount409JSONResponse{ConflictJSONResponse: oas.ConflictJSONResponse(oasError(ctx, "CONFIRMATION_REQUIRED", "missing request body", nil))}, nil
+	}
+	if !req.Body.Confirm {
+		return oas.DeleteMyMemberAccount409JSONResponse{ConflictJSONResponse: oas.ConflictJSONResponse(oasError(ctx, "CONFIRMATION_REQUIRED", "confirm must be true", nil))}, nil
+	}
+
+	// Idempotency handling (v1): same pattern as UpdateMyMemberProfile.
+	bodyHash, err := hashDeleteMyMemberBody(*req.Body)
+	if err != nil {
+		return nil, err
+	}
+	idemKey := idempotency.Key(req.Params.IdempotencyKey)
+	metaFP := idempotency.Fingerprint{
+		Key:      idemKey,
+		Subject:  domain.SubjectID(sub),
+		Method:   http.MethodDelete,
+		Route:    "/members/me",
+		BodyHash: "",
+	}
+	if s.Idem != nil {
+		if meta, ok, err := s.Idem.Get(ctx, metaFP); err != nil {
+			return nil, err
+		} else if ok {
+			if string(meta.Body) != bodyHash {
+				return oas.DeleteMyMemberAccount409JSONResponse{ConflictJSONResponse: oas.ConflictJSONResponse(oasError(ctx, "IDEMPOTENCY_KEY_REUSE", "idempotency key reuse with different payload", nil))}, nil
+			}
+		} else {
+			_ = s.Idem.Put(ctx, metaFP, idempotency.Record{
+				StatusCode:  0,
+				ContentType: "text/plain",
+				Body:        []byte(bodyHash),
+				CreatedAt:   time.Now().UTC(),
+			})
+		}
+
+		respFP := metaFP
+		respFP.BodyHash = bodyHash
+		if rec, ok, err := s.Idem.Get(ctx, respFP); err != nil {
+			return nil, err
+		} else if ok && rec.StatusCode == http.StatusOK && strings.HasPrefix(rec.ContentType, "application/json") {
+			var payload oas.DeleteMyMemberResponse
+			if err := json.Unmarshal(rec.Body, &payload); err == nil {
+				return oas.DeleteMyMemberAccount200JSONResponse(payload), nil
+			}
+		}
+	}
+
+	// If the member is already missing, treat as idempotent success.
+	m, err := s.Members.GetMyMemberProfile(ctx, domain.SubjectID(sub))
+	if err != nil {
+		if isMemberNotProvisioned(err) {
+			resp := oas.DeleteMyMemberResponse{Deleted: true}
+			return oas.DeleteMyMemberAccount200JSONResponse(resp), nil
+		}
+		return nil, err
+	}
+
+	// Delete RSVPs first (best-effort).
+	if s.Trips != nil {
+		if err := s.Trips.DeleteAllRSVPsByMember(ctx, m.ID); err != nil {
+			return nil, err
+		}
+	}
+
+	// Anonymize + deactivate the member profile, disassociating the subject.
+	if err := s.Members.AnonymizeAndDeactivateMyMember(ctx, domain.SubjectID(sub)); err != nil {
+		return nil, err
+	}
+
+	resp := oas.DeleteMyMemberResponse{
+		Deleted:   true,
+		DeletedAt: nullable.NewNullableWithValue(time.Now().UTC()),
+	}
+
+	// Store successful response for replay.
+	if s.Idem != nil {
+		respFP := idempotency.Fingerprint{
+			Key:      idempotency.Key(req.Params.IdempotencyKey),
+			Subject:  domain.SubjectID(sub),
+			Method:   http.MethodDelete,
+			Route:    "/members/me",
+			BodyHash: bodyHash,
+		}
+		if b, err := json.Marshal(resp); err == nil {
+			_ = s.Idem.Put(ctx, respFP, idempotency.Record{
+				StatusCode:  http.StatusOK,
+				ContentType: "application/json",
+				Body:        b,
+				CreatedAt:   time.Now().UTC(),
+			})
+		}
+	}
+
+	return oas.DeleteMyMemberAccount200JSONResponse(resp), nil
+}
+
 func (s *Server) ListVisibleTripsForMember(ctx context.Context, _ oas.ListVisibleTripsForMemberRequestObject) (oas.ListVisibleTripsForMemberResponseObject, error) {
 	sub, ok := SubjectFromContext(ctx)
 	if !ok {
@@ -1411,6 +1513,23 @@ func hashUpdateMyMemberProfileBody(b oas.UpdateMyMemberProfileRequest) (string, 
 		}
 	}
 
+	raw, err := json.Marshal(canon)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+func hashDeleteMyMemberBody(b oas.DeleteMyMemberRequest) (string, error) {
+	canon := b
+	if canon.Reason.IsSpecified() && !canon.Reason.IsNull() {
+		if v, err := canon.Reason.Get(); err == nil {
+			var n nullable.Nullable[string]
+			n.Set(strings.TrimSpace(v))
+			canon.Reason = n
+		}
+	}
 	raw, err := json.Marshal(canon)
 	if err != nil {
 		return "", err

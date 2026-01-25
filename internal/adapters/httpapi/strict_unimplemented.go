@@ -39,6 +39,11 @@ func (_ StrictUnimplemented) UpdateMyMemberProfile(ctx context.Context, _ oas.Up
 	return oas.UpdateMyMemberProfile500JSONResponse{InternalErrorJSONResponse: oas.InternalErrorJSONResponse(notImplementedError())}, nil
 }
 
+func (_ StrictUnimplemented) DeleteMyMemberAccount(ctx context.Context, _ oas.DeleteMyMemberAccountRequestObject) (oas.DeleteMyMemberAccountResponseObject, error) {
+	_ = ctx
+	return oas.DeleteMyMemberAccount500JSONResponse{InternalErrorJSONResponse: oas.InternalErrorJSONResponse(notImplementedError())}, nil
+}
+
 func (_ StrictUnimplemented) SearchMembers(ctx context.Context, _ oas.SearchMembersRequestObject) (oas.SearchMembersResponseObject, error) {
 	_ = ctx
 	return oas.SearchMembers500JSONResponse{InternalErrorJSONResponse: oas.InternalErrorJSONResponse(notImplementedError())}, nil

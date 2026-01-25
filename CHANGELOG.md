@@ -16,9 +16,11 @@ Notes:
 ### Added
 
 - Updated keycloak config to add ebo-client to ebo realm.
+- Added self-service member deletion endpoint (`DELETE /members/me`) with idempotency support.
 
 ### Changed
 - Added cors support to caddy #17 (AP)
+- Member deletion now removes the member’s RSVPs and anonymizes/deactivates the member profile (trips retained).
 
 ### Deprecated
 

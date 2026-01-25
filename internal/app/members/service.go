@@ -91,6 +91,13 @@ func (s *Service) GetMyMemberProfile(ctx context.Context, subject domain.Subject
 		}
 		return domain.Member{}, err
 	}
+	if !m.IsActive {
+		return domain.Member{}, &Error{
+			Status:  404,
+			Code:    "MEMBER_NOT_PROVISIONED",
+			Message: "No member profile exists for the authenticated subject.",
+		}
+	}
 	return toDomain(m), nil
 }
 
@@ -102,7 +109,7 @@ func (s *Service) CreateMyMember(ctx context.Context, subject domain.SubjectID, 
 			Code:    "MEMBER_ALREADY_EXISTS",
 			Message: "A member profile already exists for the authenticated subject.",
 		}
-	} else if err != nil && !errors.Is(err, memberrepo.ErrNotFound) {
+	} else if !errors.Is(err, memberrepo.ErrNotFound) {
 		return domain.Member{}, err
 	}
 
@@ -245,6 +252,44 @@ func (s *Service) UpdateMyMemberProfile(ctx context.Context, subject domain.Subj
 		return domain.Member{}, err
 	}
 	return toDomain(m), nil
+}
+
+// AnonymizeAndDeactivateMyMember disassociates the authenticated subject from their member record and scrubs
+// user-controlled fields to preserve referential integrity for historical trip data.
+//
+// Semantics:
+// - Member remains in storage (to preserve references from trips/organizers), but is marked inactive.
+// - Subject binding is replaced so future requests for the old subject return MEMBER_NOT_PROVISIONED.
+// - Email is replaced with a non-deliverable placeholder to avoid storing PII.
+func (s *Service) AnonymizeAndDeactivateMyMember(ctx context.Context, subject domain.SubjectID) error {
+	m, err := s.repo.GetBySubject(ctx, subject)
+	if err != nil {
+		if errors.Is(err, memberrepo.ErrNotFound) {
+			return &Error{
+				Status:  404,
+				Code:    "MEMBER_NOT_PROVISIONED",
+				Message: "No member profile exists for the authenticated subject.",
+			}
+		}
+		return err
+	}
+
+	m.IsActive = false
+
+	// Scrub user-controlled fields.
+	m.DisplayName = "Deleted member"
+	m.GroupAliasEmail = nil
+	m.VehicleProfile = nil
+
+	// Replace email with a deterministic placeholder (avoid storing original PII).
+	// Keep it unique-ish per member ID to avoid conflicts.
+	m.Email = "deleted+" + string(m.ID) + "@example.invalid"
+
+	m.UpdatedAt = s.clk.Now()
+	if err := s.repo.Update(ctx, m); err != nil {
+		return err
+	}
+	return nil
 }
 
 func applyVehicleProfilePatch(existing *domain.VehicleProfile, patch VehicleProfilePatch) *domain.VehicleProfile {

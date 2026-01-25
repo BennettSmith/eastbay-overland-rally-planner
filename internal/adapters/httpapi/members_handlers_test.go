@@ -176,3 +176,65 @@ func TestMembers_UpdateMe_IdempotentReplayAndConflictOnReuse(t *testing.T) {
 		t.Fatalf("patch3 status=%d body=%s", rec3.Code, rec3.Body.String())
 	}
 }
+
+func TestMembers_DeleteMe_RequiresConfirm_409(t *testing.T) {
+	t.Parallel()
+
+	h, mint := newTestMemberRouter(t)
+	authz := "Bearer " + mint(time.Unix(1700000000, 0), "kid-1")
+
+	// Provision first.
+	reqCreate := httptest.NewRequest(http.MethodPost, "/members", bytes.NewBufferString(`{"displayName":"Alice","email":"alice@example.com"}`))
+	reqCreate.Header.Set("Authorization", authz)
+	reqCreate.Header.Set("Content-Type", "application/json")
+	recCreate := httptest.NewRecorder()
+	h.ServeHTTP(recCreate, reqCreate)
+	if recCreate.Code != http.StatusCreated {
+		t.Fatalf("create status=%d body=%s", recCreate.Code, recCreate.Body.String())
+	}
+
+	req := httptest.NewRequest(http.MethodDelete, "/members/me", bytes.NewBufferString(`{"confirm":false}`))
+	req.Header.Set("Authorization", authz)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", "idem-del-1")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestMembers_DeleteMe_200_ThenGetMe_404(t *testing.T) {
+	t.Parallel()
+
+	h, mint := newTestMemberRouter(t)
+	authz := "Bearer " + mint(time.Unix(1700000000, 0), "kid-1")
+
+	// Provision first.
+	reqCreate := httptest.NewRequest(http.MethodPost, "/members", bytes.NewBufferString(`{"displayName":"Alice","email":"alice@example.com"}`))
+	reqCreate.Header.Set("Authorization", authz)
+	reqCreate.Header.Set("Content-Type", "application/json")
+	recCreate := httptest.NewRecorder()
+	h.ServeHTTP(recCreate, reqCreate)
+	if recCreate.Code != http.StatusCreated {
+		t.Fatalf("create status=%d body=%s", recCreate.Code, recCreate.Body.String())
+	}
+
+	req := httptest.NewRequest(http.MethodDelete, "/members/me", bytes.NewBufferString(`{"confirm":true,"reason":"testing"}`))
+	req.Header.Set("Authorization", authz)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", "idem-del-2")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("delete status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	req2 := httptest.NewRequest(http.MethodGet, "/members/me", nil)
+	req2.Header.Set("Authorization", authz)
+	rec2 := httptest.NewRecorder()
+	h.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusNotFound {
+		t.Fatalf("get status=%d body=%s", rec2.Code, rec2.Body.String())
+	}
+}

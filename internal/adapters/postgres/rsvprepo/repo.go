@@ -129,6 +129,63 @@ func (r *Repo) ListByTrip(ctx context.Context, tripID domain.TripID) ([]rsvprepo
 	return out, nil
 }
 
+func (r *Repo) ListByMember(ctx context.Context, memberID domain.MemberID) ([]rsvprepo.RSVP, error) {
+	if r.pool == nil {
+		return nil, errors.New("nil postgres pool")
+	}
+	mid, err := uuid.Parse(string(memberID))
+	if err != nil {
+		return []rsvprepo.RSVP{}, nil
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT t.external_id, r.response, r.updated_at
+		FROM trip_rsvps r
+		JOIN trips t ON t.id = r.trip_id
+		JOIN members m ON m.id = r.member_id
+		WHERE m.external_id = $1
+		ORDER BY t.external_id ASC, r.updated_at ASC
+	`, mid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]rsvprepo.RSVP, 0)
+	for rows.Next() {
+		var tid uuid.UUID
+		var status string
+		var updatedAt time.Time
+		if err := rows.Scan(&tid, &status, &updatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, rsvprepo.RSVP{
+			TripID:    domain.TripID(tid.String()),
+			MemberID:  memberID,
+			Status:    rsvprepo.Status(status),
+			UpdatedAt: updatedAt.UTC(),
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (r *Repo) DeleteByMember(ctx context.Context, memberID domain.MemberID) error {
+	if r.pool == nil {
+		return errors.New("nil postgres pool")
+	}
+	mid, err := uuid.Parse(string(memberID))
+	if err != nil {
+		return nil
+	}
+	_, err = r.pool.Exec(ctx, `
+		DELETE FROM trip_rsvps
+		WHERE member_id = (SELECT id FROM members WHERE external_id = $1)
+	`, mid)
+	return err
+}
+
 func (r *Repo) CountYesByTrip(ctx context.Context, tripID domain.TripID) (int, error) {
 	if r.pool == nil {
 		return 0, errors.New("nil postgres pool")
