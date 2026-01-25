@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/BennettSmith/ebo-planner-backend/internal/domain"
+	"github.com/Overland-East-Bay/trip-planner-api/internal/domain"
 )
 
 type Status string
@@ -32,6 +32,14 @@ type Repository interface {
 
 	// ListByTrip returns all RSVP records for a trip.
 	ListByTrip(ctx context.Context, tripID domain.TripID) ([]RSVP, error)
+
+	// ListByMember returns all RSVP records for a member (across trips).
+	// Ordering is best-effort; callers should not rely on it for business logic.
+	ListByMember(ctx context.Context, memberID domain.MemberID) ([]RSVP, error)
+
+	// DeleteByMember deletes all RSVP records for a member (across trips).
+	// It must be idempotent.
+	DeleteByMember(ctx context.Context, memberID domain.MemberID) error
 
 	// CountYesByTrip counts RSVP=YES for the specified trip.
 	CountYesByTrip(ctx context.Context, tripID domain.TripID) (int, error)

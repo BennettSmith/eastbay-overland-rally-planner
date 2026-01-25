@@ -3,7 +3,7 @@ package httpapi
 import (
 	"context"
 
-	"github.com/BennettSmith/ebo-planner-backend/internal/adapters/httpapi/oas"
+	"github.com/Overland-East-Bay/trip-planner-api/internal/adapters/httpapi/oas"
 )
 
 // StrictUnimplemented is a temporary strict-server implementation used to keep the
@@ -37,6 +37,11 @@ func (_ StrictUnimplemented) GetMyMemberProfile(ctx context.Context, _ oas.GetMy
 func (_ StrictUnimplemented) UpdateMyMemberProfile(ctx context.Context, _ oas.UpdateMyMemberProfileRequestObject) (oas.UpdateMyMemberProfileResponseObject, error) {
 	_ = ctx
 	return oas.UpdateMyMemberProfile500JSONResponse{InternalErrorJSONResponse: oas.InternalErrorJSONResponse(notImplementedError())}, nil
+}
+
+func (_ StrictUnimplemented) DeleteMyMemberAccount(ctx context.Context, _ oas.DeleteMyMemberAccountRequestObject) (oas.DeleteMyMemberAccountResponseObject, error) {
+	_ = ctx
+	return oas.DeleteMyMemberAccount500JSONResponse{InternalErrorJSONResponse: oas.InternalErrorJSONResponse(notImplementedError())}, nil
 }
 
 func (_ StrictUnimplemented) SearchMembers(ctx context.Context, _ oas.SearchMembersRequestObject) (oas.SearchMembersResponseObject, error) {

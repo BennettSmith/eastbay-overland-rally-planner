@@ -10,10 +10,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/BennettSmith/ebo-planner-backend/internal/domain"
-	"github.com/BennettSmith/ebo-planner-backend/internal/ports/out/memberrepo"
-	"github.com/BennettSmith/ebo-planner-backend/internal/ports/out/rsvprepo"
-	"github.com/BennettSmith/ebo-planner-backend/internal/ports/out/triprepo"
+	"github.com/Overland-East-Bay/trip-planner-api/internal/domain"
+	"github.com/Overland-East-Bay/trip-planner-api/internal/ports/out/memberrepo"
+	"github.com/Overland-East-Bay/trip-planner-api/internal/ports/out/rsvprepo"
+	"github.com/Overland-East-Bay/trip-planner-api/internal/ports/out/triprepo"
 )
 
 type Service struct {
@@ -41,6 +41,50 @@ func (s *Service) SetNewTripIDForTest(fn func() domain.TripID) {
 	if fn != nil {
 		s.newTripID = fn
 	}
+}
+
+// DeleteAllRSVPsByMember deletes all RSVP records for the member and updates trip attendance read models.
+//
+// This is intended for self-service account deletion flows.
+// It is best-effort but should fail closed on unexpected persistence errors.
+func (s *Service) DeleteAllRSVPsByMember(ctx context.Context, memberID domain.MemberID) error {
+	recs, err := s.rsvps.ListByMember(ctx, memberID)
+	if err != nil {
+		return err
+	}
+
+	tripIDs := make(map[domain.TripID]struct{}, len(recs))
+	for _, r := range recs {
+		tripIDs[r.TripID] = struct{}{}
+	}
+
+	if err := s.rsvps.DeleteByMember(ctx, memberID); err != nil {
+		return err
+	}
+
+	// Recompute attendance for impacted trips.
+	for tid := range tripIDs {
+		n, err := s.rsvps.CountYesByTrip(ctx, tid)
+		if err != nil {
+			return err
+		}
+		t, err := s.trips.GetByID(ctx, tid)
+		if err != nil {
+			// If the trip is missing, nothing to update.
+			if errors.Is(err, triprepo.ErrNotFound) {
+				continue
+			}
+			return err
+		}
+		nn := n
+		t.AttendingRigs = &nn
+		t.UpdatedAt = time.Now().UTC()
+		if err := s.trips.Save(ctx, t); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (s *Service) ListVisibleTripsForMember(ctx context.Context, _ domain.MemberID) ([]domain.TripSummary, error) {

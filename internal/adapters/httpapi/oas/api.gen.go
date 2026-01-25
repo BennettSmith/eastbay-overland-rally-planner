@@ -84,6 +84,24 @@ type CreateTripDraftResponse struct {
 	Trip TripCreated `json:"trip"`
 }
 
+// DeleteMyMemberRequest Request body for self-service member deletion.
+type DeleteMyMemberRequest struct {
+	// Confirm Must be true to proceed with deletion.
+	Confirm bool `json:"confirm"`
+
+	// Reason Optional user-provided reason (best-effort; for audit/analytics).
+	Reason nullable.Nullable[string] `json:"reason,omitempty"`
+}
+
+// DeleteMyMemberResponse defines model for DeleteMyMemberResponse.
+type DeleteMyMemberResponse struct {
+	// Deleted True when deletion has been applied (idempotent).
+	Deleted bool `json:"deleted"`
+
+	// DeletedAt When deletion was applied (best-effort).
+	DeletedAt nullable.Nullable[time.Time] `json:"deletedAt,omitempty"`
+}
+
 // DraftVisibility defines model for DraftVisibility.
 type DraftVisibility string
 
@@ -335,6 +353,12 @@ type ListMembersParams struct {
 	IncludeInactive *IncludeInactive `form:"includeInactive,omitempty" json:"includeInactive,omitempty"`
 }
 
+// DeleteMyMemberAccountParams defines parameters for DeleteMyMemberAccount.
+type DeleteMyMemberAccountParams struct {
+	// IdempotencyKey Required idempotency key for safely retrying this mutating request.
+	IdempotencyKey RequiredIdempotencyKey `json:"Idempotency-Key"`
+}
+
 // UpdateMyMemberProfileParams defines parameters for UpdateMyMemberProfile.
 type UpdateMyMemberProfileParams struct {
 	// IdempotencyKey Required idempotency key for safely retrying this mutating request.
@@ -392,6 +416,9 @@ type SetMyRSVPParams struct {
 // CreateMyMemberJSONRequestBody defines body for CreateMyMember for application/json ContentType.
 type CreateMyMemberJSONRequestBody = CreateMemberRequest
 
+// DeleteMyMemberAccountJSONRequestBody defines body for DeleteMyMemberAccount for application/json ContentType.
+type DeleteMyMemberAccountJSONRequestBody = DeleteMyMemberRequest
+
 // UpdateMyMemberProfileJSONRequestBody defines body for UpdateMyMemberProfile for application/json ContentType.
 type UpdateMyMemberProfileJSONRequestBody = UpdateMyMemberProfileRequest
 
@@ -418,6 +445,9 @@ type ServerInterface interface {
 	// Create my member profile (self-provision membership)
 	// (POST /members)
 	CreateMyMember(w http.ResponseWriter, r *http.Request)
+	// Delete my member account (resolved from JWT subject)
+	// (DELETE /members/me)
+	DeleteMyMemberAccount(w http.ResponseWriter, r *http.Request, params DeleteMyMemberAccountParams)
 	// Get my member profile (resolved from JWT subject)
 	// (GET /members/me)
 	GetMyMemberProfile(w http.ResponseWriter, r *http.Request)
@@ -481,6 +511,12 @@ func (_ Unimplemented) ListMembers(w http.ResponseWriter, r *http.Request, param
 // Create my member profile (self-provision membership)
 // (POST /members)
 func (_ Unimplemented) CreateMyMember(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Delete my member account (resolved from JWT subject)
+// (DELETE /members/me)
+func (_ Unimplemented) DeleteMyMemberAccount(w http.ResponseWriter, r *http.Request, params DeleteMyMemberAccountParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -633,6 +669,56 @@ func (siw *ServerInterfaceWrapper) CreateMyMember(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateMyMember(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteMyMemberAccount operation middleware
+func (siw *ServerInterfaceWrapper) DeleteMyMemberAccount(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteMyMemberAccountParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey RequiredIdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteMyMemberAccount(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1445,6 +1531,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/members", wrapper.CreateMyMember)
 	})
 	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/members/me", wrapper.DeleteMyMemberAccount)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/members/me", wrapper.GetMyMemberProfile)
 	})
 	r.Group(func(r chi.Router) {
@@ -1592,6 +1681,60 @@ func (response CreateMyMember422JSONResponse) VisitCreateMyMemberResponse(w http
 type CreateMyMember500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response CreateMyMember500JSONResponse) VisitCreateMyMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteMyMemberAccountRequestObject struct {
+	Params DeleteMyMemberAccountParams
+	Body   *DeleteMyMemberAccountJSONRequestBody
+}
+
+type DeleteMyMemberAccountResponseObject interface {
+	VisitDeleteMyMemberAccountResponse(w http.ResponseWriter) error
+}
+
+type DeleteMyMemberAccount200JSONResponse DeleteMyMemberResponse
+
+func (response DeleteMyMemberAccount200JSONResponse) VisitDeleteMyMemberAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteMyMemberAccount401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteMyMemberAccount401JSONResponse) VisitDeleteMyMemberAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteMyMemberAccount404JSONResponse ErrorResponse
+
+func (response DeleteMyMemberAccount404JSONResponse) VisitDeleteMyMemberAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteMyMemberAccount409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteMyMemberAccount409JSONResponse) VisitDeleteMyMemberAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteMyMemberAccount500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DeleteMyMemberAccount500JSONResponse) VisitDeleteMyMemberAccountResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
 
@@ -2505,6 +2648,9 @@ type StrictServerInterface interface {
 	// Create my member profile (self-provision membership)
 	// (POST /members)
 	CreateMyMember(ctx context.Context, request CreateMyMemberRequestObject) (CreateMyMemberResponseObject, error)
+	// Delete my member account (resolved from JWT subject)
+	// (DELETE /members/me)
+	DeleteMyMemberAccount(ctx context.Context, request DeleteMyMemberAccountRequestObject) (DeleteMyMemberAccountResponseObject, error)
 	// Get my member profile (resolved from JWT subject)
 	// (GET /members/me)
 	GetMyMemberProfile(ctx context.Context, request GetMyMemberProfileRequestObject) (GetMyMemberProfileResponseObject, error)
@@ -2634,6 +2780,39 @@ func (sh *strictHandler) CreateMyMember(w http.ResponseWriter, r *http.Request) 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateMyMemberResponseObject); ok {
 		if err := validResponse.VisitCreateMyMemberResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteMyMemberAccount operation middleware
+func (sh *strictHandler) DeleteMyMemberAccount(w http.ResponseWriter, r *http.Request, params DeleteMyMemberAccountParams) {
+	var request DeleteMyMemberAccountRequestObject
+
+	request.Params = params
+
+	var body DeleteMyMemberAccountJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteMyMemberAccount(ctx, request.(DeleteMyMemberAccountRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteMyMemberAccount")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteMyMemberAccountResponseObject); ok {
+		if err := validResponse.VisitDeleteMyMemberAccountResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
