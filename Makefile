@@ -124,6 +124,10 @@ help:
 	@echo ""
 	@echo "  gen-openapi    Generate Go server stubs + types from OpenAPI spec"
 	@echo ""
+	@echo "  tf-init-local  Terraform init (infra/local) for LocalStack rehearsal"
+	@echo "  tf-apply-local Terraform apply (infra/local) for LocalStack rehearsal"
+	@echo "  tf-destroy-local Terraform destroy (infra/local) for LocalStack rehearsal"
+	@echo ""
 	@echo "Vars (override like: make up POSTGRES_PORT=5433):"
 	@echo "  POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB POSTGRES_PORT SEED_FILE DATABASE_URL"
 	@echo "  COMPOSE DB_SERVICE API_SERVICE PROXY_SERVICE API_IMAGE"
@@ -353,4 +357,18 @@ release-help:
 	@echo "  2) Add Unreleased notes in CHANGELOG.md (service/runtime/migrations + Implements spec ...)"
 	@echo "  3) make changelog-release VERSION=1.0.0"
 	@echo "  4) Commit CHANGELOG.md, tag v1.0.0, push tag"
+
+# --- LocalStack rehearsal helpers ---
+
+.PHONY: tf-init-local
+tf-init-local:
+	@cd infra/local && terraform init
+
+.PHONY: tf-apply-local
+tf-apply-local:
+	@cd infra/local && terraform apply -auto-approve
+
+.PHONY: tf-destroy-local
+tf-destroy-local:
+	@cd infra/local && terraform destroy -auto-approve
 

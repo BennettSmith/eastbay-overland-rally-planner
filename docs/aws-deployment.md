@@ -50,6 +50,10 @@ Both workflows:
 - Build and push the Docker image to ECR
 - Apply Terraform for the environment
 
+## LocalStack rehearsal (optional)
+
+See `docs/terraform-localstack.md` for a fast ECS/ECR wiring rehearsal path.
+
 ## Migrations (ECS task)
 
 Migrations run as a one-off ECS task using the `Dockerfile.migrate` image. The
