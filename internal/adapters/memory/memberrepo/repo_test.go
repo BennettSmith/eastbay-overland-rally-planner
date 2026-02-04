@@ -185,3 +185,58 @@ func TestRepo_SearchActiveByDisplayName_RespectsLimit(t *testing.T) {
 		t.Fatalf("len=%d, want 1", len(got))
 	}
 }
+
+func TestRepo_ClonesPointerFieldsOnRead(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	r := NewRepo()
+	now := time.Unix(200, 0).UTC()
+
+	gae := "alias@example.com"
+	make := "Toyota"
+	model := "4Runner"
+	m := memberrepo.Member{
+		ID:              "m1",
+		Subject:         "sub-1",
+		DisplayName:     "Alice",
+		Email:           "alice@example.com",
+		GroupAliasEmail: &gae,
+		VehicleProfile: &domain.VehicleProfile{
+			Make:  &make,
+			Model: &model,
+		},
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := r.Create(ctx, m); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	got, err := r.GetByID(ctx, "m1")
+	if err != nil {
+		t.Fatalf("GetByID: %v", err)
+	}
+	if got.GroupAliasEmail == nil || *got.GroupAliasEmail != "alias@example.com" {
+		t.Fatalf("GroupAliasEmail=%v", got.GroupAliasEmail)
+	}
+	if got.VehicleProfile == nil || got.VehicleProfile.Make == nil || *got.VehicleProfile.Make != "Toyota" {
+		t.Fatalf("VehicleProfile=%+v", got.VehicleProfile)
+	}
+
+	// Mutate the returned struct pointers; repository storage should be unaffected.
+	*got.GroupAliasEmail = "changed@example.com"
+	*got.VehicleProfile.Make = "Changed"
+
+	got2, err := r.GetBySubject(ctx, "sub-1")
+	if err != nil {
+		t.Fatalf("GetBySubject: %v", err)
+	}
+	if got2.GroupAliasEmail == nil || *got2.GroupAliasEmail != "alias@example.com" {
+		t.Fatalf("expected clone on read (groupAliasEmail), got=%v", got2.GroupAliasEmail)
+	}
+	if got2.VehicleProfile == nil || got2.VehicleProfile.Make == nil || *got2.VehicleProfile.Make != "Toyota" {
+		t.Fatalf("expected clone on read (vehicleProfile), got=%+v", got2.VehicleProfile)
+	}
+}

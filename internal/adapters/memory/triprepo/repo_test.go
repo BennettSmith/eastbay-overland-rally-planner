@@ -93,3 +93,34 @@ func TestRepo_ListDraftsVisibleTo_VisibilityRules(t *testing.T) {
 		t.Fatalf("order=%v, want [t1 t3]", []domain.TripID{got[0].ID, got[1].ID})
 	}
 }
+
+func TestRepo_Save_UpsertsAndRejectsEmptyID(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	r := NewRepo()
+
+	if err := r.Save(ctx, triprepo.Trip{}); err != triprepo.ErrNotFound {
+		t.Fatalf("Save(empty id) err=%v want=%v", err, triprepo.ErrNotFound)
+	}
+
+	name := "Trip"
+	t1 := triprepo.Trip{ID: "t1", Status: triprepo.StatusDraft, Name: &name, CreatedAt: time.Unix(1, 0).UTC(), UpdatedAt: time.Unix(1, 0).UTC()}
+	if err := r.Save(ctx, t1); err != nil {
+		t.Fatalf("Save(new) err=%v", err)
+	}
+
+	// Update via Save.
+	name2 := "Trip 2"
+	t1.Name = &name2
+	if err := r.Save(ctx, t1); err != nil {
+		t.Fatalf("Save(update) err=%v", err)
+	}
+	got, err := r.GetByID(ctx, "t1")
+	if err != nil {
+		t.Fatalf("GetByID: %v", err)
+	}
+	if got.Name == nil || *got.Name != "Trip 2" {
+		t.Fatalf("got.Name=%v", got.Name)
+	}
+}
