@@ -28,6 +28,12 @@ variable "image_tag" {
   default     = "latest"
 }
 
+variable "migrations_image_tag" {
+  type        = string
+  description = "Migrations image tag (defaults to image_tag)."
+  default     = ""
+}
+
 variable "desired_count" {
   type        = number
   description = "Desired ECS task count."

@@ -7,8 +7,9 @@ module "trip_planner_api" {
   vpc_cidr = var.vpc_cidr
   az_count = var.az_count
 
-  image_tag     = var.image_tag
-  desired_count = var.desired_count
+  image_tag            = var.image_tag
+  migrations_image_tag = var.migrations_image_tag
+  desired_count        = var.desired_count
 
   jwt_issuer   = var.jwt_issuer
   jwt_audience = var.jwt_audience

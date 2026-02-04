@@ -16,6 +16,8 @@ locals {
     for idx in range(var.az_count) : cidrsubnet(var.vpc_cidr, 8, idx + var.az_count)
   ]
 
+  migrations_image_tag = var.migrations_image_tag != "" ? var.migrations_image_tag : var.image_tag
+
   enable_tls = var.certificate_arn != "" || var.create_acm_certificate
   tls_certificate_arn = var.certificate_arn != "" ? var.certificate_arn : (
     var.create_acm_certificate ? aws_acm_certificate.app[0].arn : ""
@@ -224,6 +226,15 @@ resource "aws_cloudwatch_log_group" "app" {
 
   tags = merge(var.tags, {
     Name = "${local.name_prefix}-logs"
+  })
+}
+
+resource "aws_cloudwatch_log_group" "migrations" {
+  name              = "/ecs/${local.name_prefix}-migrations"
+  retention_in_days = var.log_retention_days
+
+  tags = merge(var.tags, {
+    Name = "${local.name_prefix}-migrations-logs"
   })
 }
 
@@ -491,6 +502,38 @@ resource "aws_ecs_task_definition" "app" {
         logDriver = "awslogs"
         options = {
           awslogs-group         = aws_cloudwatch_log_group.app.name
+          awslogs-region        = data.aws_region.current.name
+          awslogs-stream-prefix = "ecs"
+        }
+      }
+    }
+  ])
+}
+
+resource "aws_ecs_task_definition" "migrations" {
+  family                   = "${local.name_prefix}-migrations"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = var.migrations_task_cpu
+  memory                   = var.migrations_task_memory
+  execution_role_arn       = aws_iam_role.task_execution.arn
+  task_role_arn            = aws_iam_role.task.arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "migrations"
+      image     = "${aws_ecr_repository.app.repository_url}:${local.migrations_image_tag}"
+      essential = true
+      secrets = [
+        {
+          name      = "DATABASE_URL"
+          valueFrom = "${aws_secretsmanager_secret.db_credentials.arn}:database_url::"
+        }
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.migrations.name
           awslogs-region        = data.aws_region.current.name
           awslogs-stream-prefix = "ecs"
         }

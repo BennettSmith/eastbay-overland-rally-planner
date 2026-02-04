@@ -49,3 +49,35 @@ Both workflows:
 - Assume the AWS role via GitHub OIDC
 - Build and push the Docker image to ECR
 - Apply Terraform for the environment
+
+## Migrations (ECS task)
+
+Migrations run as a one-off ECS task using the `Dockerfile.migrate` image. The
+task is wired to the same database secret as the service and defaults to `up`.
+
+### Runbook
+
+Use the deployment workflow (preferred) or run manually:
+
+```bash
+cd infra/aws/envs/<env>
+terraform output -raw ecs_cluster_name
+terraform output -raw migrations_task_definition_arn
+terraform output -raw private_subnet_ids_csv
+terraform output -raw ecs_task_security_group_id
+
+aws ecs run-task \
+  --cluster "<cluster>" \
+  --task-definition "<task-definition-arn>" \
+  --launch-type FARGATE \
+  --network-configuration "awsvpcConfiguration={subnets=[<subnet-ids>],securityGroups=[<sg-id>],assignPublicIp=DISABLED}"
+```
+
+To run a different migration command (e.g., down 1), override the container
+command or set `MIGRATE_COMMAND` when invoking the task.
+
+### Rollback considerations
+
+Prefer forward-only migrations. If a rollback is required, restore from an RDS
+snapshot and redeploy a compatible application version. Use `migrate down`
+only when you have explicitly tested the rollback path.

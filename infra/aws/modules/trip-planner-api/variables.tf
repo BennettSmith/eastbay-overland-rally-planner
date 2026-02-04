@@ -56,6 +56,18 @@ variable "task_memory" {
   default     = "512"
 }
 
+variable "migrations_task_cpu" {
+  type        = string
+  description = "Fargate task CPU units for migrations."
+  default     = "256"
+}
+
+variable "migrations_task_memory" {
+  type        = string
+  description = "Fargate task memory (MiB) for migrations."
+  default     = "512"
+}
+
 variable "desired_count" {
   type        = number
   description = "Desired number of ECS tasks."
@@ -66,6 +78,12 @@ variable "image_tag" {
   type        = string
   description = "Container image tag to deploy."
   default     = "latest"
+}
+
+variable "migrations_image_tag" {
+  type        = string
+  description = "Container image tag for migrations (defaults to image_tag)."
+  default     = ""
 }
 
 variable "health_check_path" {

@@ -13,6 +13,11 @@ output "private_subnet_ids" {
   value       = aws_subnet.private[*].id
 }
 
+output "ecs_security_group_id" {
+  description = "Security group ID for ECS tasks."
+  value       = aws_security_group.ecs.id
+}
+
 output "alb_dns_name" {
   description = "ALB DNS name."
   value       = aws_lb.app.dns_name
@@ -31,6 +36,11 @@ output "ecs_cluster_name" {
 output "ecs_service_name" {
   description = "ECS service name."
   value       = aws_ecs_service.app.name
+}
+
+output "migrations_task_definition_arn" {
+  description = "ECS task definition ARN for migrations."
+  value       = aws_ecs_task_definition.migrations.arn
 }
 
 output "ecr_repository_url" {

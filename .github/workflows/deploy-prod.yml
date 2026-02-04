@@ -53,7 +53,7 @@ jobs:
           echo "PROJECT_NAME=${PROJECT_NAME}" >> "${GITHUB_ENV}"
           echo "TF_VAR_project_name=${PROJECT_NAME}" >> "${GITHUB_ENV}"
           echo "IMAGE_TAG=${IMAGE_TAG}" >> "${GITHUB_ENV}"
-          echo "TF_VAR_image_tag=${IMAGE_TAG}" >> "${GITHUB_ENV}"
+          echo "MIGRATIONS_IMAGE_TAG=${IMAGE_TAG}-migrations" >> "${GITHUB_ENV}"
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
@@ -92,11 +92,40 @@ jobs:
             echo "exists=false" >> "${GITHUB_OUTPUT}"
           fi
 
+      - name: Determine current image tag
+        id: current-image
+        run: |
+          PROJECT_NAME="${PROJECT_NAME:-trip-planner-api}"
+          CLUSTER="${PROJECT_NAME}-prod"
+          SERVICE="${PROJECT_NAME}-prod"
+          if [ "${{ steps.ecs.outputs.exists }}" = "true" ]; then
+            TASK_DEF=$(aws ecs describe-services \
+              --cluster "${CLUSTER}" \
+              --services "${SERVICE}" \
+              --query "services[0].taskDefinition" \
+              --output text)
+            IMAGE=$(aws ecs describe-task-definition \
+              --task-definition "${TASK_DEF}" \
+              --query "taskDefinition.containerDefinitions[?name=='app'].image | [0]" \
+              --output text)
+            if echo "${IMAGE}" | grep -q '@'; then
+              CURRENT_IMAGE_TAG="${IMAGE_TAG}"
+            else
+              CURRENT_IMAGE_TAG="${IMAGE##*:}"
+            fi
+          else
+            CURRENT_IMAGE_TAG="${IMAGE_TAG}"
+          fi
+          echo "CURRENT_IMAGE_TAG=${CURRENT_IMAGE_TAG}" >> "${GITHUB_ENV}"
+
       - name: Bootstrap infra (first deploy only)
         if: steps.ecs.outputs.exists != 'true'
         working-directory: infra/aws/envs/prod
         run: |
-          terraform apply -auto-approve -var "desired_count=0"
+          terraform apply -auto-approve \
+            -var "desired_count=0" \
+            -var "image_tag=${IMAGE_TAG}" \
+            -var "migrations_image_tag=${MIGRATIONS_IMAGE_TAG}"
 
       - name: Login to Amazon ECR
         id: ecr-login
@@ -111,7 +140,50 @@ jobs:
           docker build -t "${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}" .
           docker push "${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}"
 
-      - name: Terraform apply
+      - name: Build and push migrations image
+        env:
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          PROJECT_NAME="${PROJECT_NAME:-trip-planner-api}"
+          REPOSITORY="${PROJECT_NAME}-prod"
+          docker build -f Dockerfile.migrate -t "${REGISTRY}/${REPOSITORY}:${MIGRATIONS_IMAGE_TAG}" .
+          docker push "${REGISTRY}/${REPOSITORY}:${MIGRATIONS_IMAGE_TAG}"
+
+      - name: Update migrations task definition
         working-directory: infra/aws/envs/prod
         run: |
-          terraform apply -auto-approve
+          terraform apply -auto-approve \
+            -var "image_tag=${CURRENT_IMAGE_TAG}" \
+            -var "migrations_image_tag=${MIGRATIONS_IMAGE_TAG}"
+
+      - name: Run migrations task
+        working-directory: infra/aws/envs/prod
+        run: |
+          CLUSTER=$(terraform output -raw ecs_cluster_name)
+          TASK_DEF=$(terraform output -raw migrations_task_definition_arn)
+          SUBNETS=$(terraform output -raw private_subnet_ids_csv)
+          SECURITY_GROUP=$(terraform output -raw ecs_task_security_group_id)
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "${CLUSTER}" \
+            --task-definition "${TASK_DEF}" \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[${SUBNETS}],securityGroups=[${SECURITY_GROUP}],assignPublicIp=DISABLED}" \
+            --query "tasks[0].taskArn" \
+            --output text)
+          aws ecs wait tasks-stopped --cluster "${CLUSTER}" --tasks "${TASK_ARN}"
+          EXIT_CODE=$(aws ecs describe-tasks \
+            --cluster "${CLUSTER}" \
+            --tasks "${TASK_ARN}" \
+            --query "tasks[0].containers[0].exitCode" \
+            --output text)
+          if [ "${EXIT_CODE}" != "0" ]; then
+            echo "Migration task failed with exit code ${EXIT_CODE}" >&2
+            exit 1
+          fi
+
+      - name: Terraform apply (deploy service)
+        working-directory: infra/aws/envs/prod
+        run: |
+          terraform apply -auto-approve \
+            -var "image_tag=${IMAGE_TAG}" \
+            -var "migrations_image_tag=${MIGRATIONS_IMAGE_TAG}"
