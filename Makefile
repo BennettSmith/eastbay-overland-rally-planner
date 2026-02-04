@@ -270,6 +270,7 @@ PKGS ?= ./...
 COVERPROFILE ?= coverage.out
 COVERHTML ?= coverage.html
 MIN_COVERAGE ?= 85.0
+COVERPROFILE_RAW ?= coverage.raw.out
 
 .PHONY: fmt-check
 fmt-check:
@@ -321,7 +322,8 @@ cover:
 
 .PHONY: cover-check
 cover-check:
-	@$(GO) test -coverprofile=$(COVERPROFILE) $(PKGS)
+	@$(GO) test -coverprofile=$(COVERPROFILE_RAW) $(PKGS)
+	@awk 'NR==1{print; next} $$1 !~ /\.gen\.go:/ {print}' "$(COVERPROFILE_RAW)" > "$(COVERPROFILE)"
 	@total="$$( $(GO) tool cover -func=$(COVERPROFILE) | awk '/^total:/{gsub(/%/,"",$$3); print $$3}' )"; \
 	if [ -z "$$total" ]; then \
 		echo "ERROR: failed to determine total coverage from $(COVERPROFILE)" >&2; \
