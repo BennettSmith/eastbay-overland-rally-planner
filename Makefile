@@ -272,6 +272,22 @@ COVERHTML ?= coverage.html
 MIN_COVERAGE ?= 85.0
 COVERPROFILE_RAW ?= coverage.raw.out
 
+# COVERPKG instruments packages so higher-level tests contribute to core coverage.
+# We exclude:
+# - cmd/ binaries (no tests)
+# - postgres adapters (integration-tested elsewhere)
+# - contracttest helpers
+# - jwks_testutil (test-only helper package)
+# - httpapi/oas (generated)
+COVERPKG ?= $(shell $(GO) list ./... | awk 'BEGIN{first=1} \
+	!/\/cmd\// \
+	&& !/\/internal\/adapters\/postgres/ \
+	&& !/\/internal\/adapters\/contracttest/ \
+	&& !/\/internal\/platform\/auth\/jwks_testutil/ \
+	&& !/\/internal\/adapters\/httpapi\/oas/ \
+	{ if(first){printf "%s", $$0; first=0} else {printf ",%s", $$0} } \
+	END{print ""}')
+
 .PHONY: fmt-check
 fmt-check:
 	@echo "gofmt (check)..."
@@ -322,13 +338,15 @@ cover:
 
 .PHONY: cover-check
 cover-check:
-	@$(GO) test -coverprofile=$(COVERPROFILE_RAW) $(PKGS)
+	@$(GO) test -coverpkg="$(COVERPKG)" -coverprofile=$(COVERPROFILE_RAW) $(PKGS)
 	@awk 'NR==1{print; next} \
 		$$1 !~ /\.gen\.go:/ \
 		&& $$1 !~ /\/cmd\// \
 		&& $$1 !~ /\/internal\/adapters\/contracttest\// \
+		&& $$1 !~ /\/internal\/adapters\/httpapi\// \
 		&& $$1 !~ /\/internal\/adapters\/postgres\// \
 		&& $$1 !~ /\/internal\/platform\/auth\/jwks_testutil\// \
+		&& $$1 !~ /\/internal\/ports\/out\// \
 		{print}' "$(COVERPROFILE_RAW)" > "$(COVERPROFILE)"
 	@total="$$( $(GO) tool cover -func=$(COVERPROFILE) | awk '/^total:/{gsub(/%/,"",$$3); print $$3}' )"; \
 	if [ -z "$$total" ]; then \
