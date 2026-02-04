@@ -115,12 +115,13 @@ help:
 	@echo "  vet            Run go vet (./...)"
 	@echo "  test           Run Go unit tests (./...)"
 	@echo "  build          Compile all packages (./...)"
-	@echo "  ci             Run the repo's 'green' gate (format-check + vet + tests + build + changelog/spec.lock)"
+	@echo "  ci             Run the repo's 'green' gate (changelog/spec.lock + fmt-check + vet + coverage gate + build)"
 	@echo "  itest          Run HTTP API integration tests (memory backend)"
 	@echo "  itest-postgres Run HTTP API integration tests (postgres backend; requires db)"
 	@echo "  itest-all      Run HTTP API integration tests (all backends)"
 	@echo "  cover          Run tests with coverage (writes coverage.out; prints summary)"
 	@echo "  cover-html     Generate coverage.html from coverage.out"
+	@echo "  cover-check    Run tests and fail if total coverage < MIN_COVERAGE (default: 85.0)"
 	@echo ""
 	@echo "  gen-openapi    Generate Go server stubs + types from OpenAPI spec"
 	@echo ""
@@ -268,6 +269,7 @@ PKGS ?= ./...
 
 COVERPROFILE ?= coverage.out
 COVERHTML ?= coverage.html
+MIN_COVERAGE ?= 85.0
 
 .PHONY: fmt-check
 fmt-check:
@@ -298,7 +300,7 @@ build:
 	@$(GO) build $(PKGS)
 
 .PHONY: ci
-ci: changelog-verify fmt-check vet test build
+ci: changelog-verify fmt-check vet cover-check build
 
 .PHONY: itest
 itest:
@@ -316,6 +318,18 @@ itest-all:
 cover:
 	@$(GO) test -coverprofile=$(COVERPROFILE) $(PKGS)
 	@$(GO) tool cover -func=$(COVERPROFILE)
+
+.PHONY: cover-check
+cover-check:
+	@$(GO) test -coverprofile=$(COVERPROFILE) $(PKGS)
+	@total="$$( $(GO) tool cover -func=$(COVERPROFILE) | awk '/^total:/{gsub(/%/,"",$$3); print $$3}' )"; \
+	if [ -z "$$total" ]; then \
+		echo "ERROR: failed to determine total coverage from $(COVERPROFILE)" >&2; \
+		exit 1; \
+	fi; \
+	echo "Total coverage: $$total% (min $(MIN_COVERAGE)%)"; \
+	awk -v total="$$total" -v min="$(MIN_COVERAGE)" 'BEGIN { exit((total+0) < (min+0)) }' \
+	|| (echo "ERROR: coverage $$total% is below minimum $(MIN_COVERAGE)%" >&2; exit 1)
 
 .PHONY: cover-html
 cover-html: cover
