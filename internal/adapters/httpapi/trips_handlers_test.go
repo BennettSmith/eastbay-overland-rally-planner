@@ -591,3 +591,159 @@ func TestTrips_RSVP_Flow_SetGetSummary_IdempotencyAndCapacity(t *testing.T) {
 		t.Fatalf("expected rsvpSummary and myRsvp in trip details for m1")
 	}
 }
+
+func TestTrips_UpdateTrip_IdempotencyReplayAndConflict(t *testing.T) {
+	t.Parallel()
+
+	h, mint, _, _ := newTestTripRouter(t)
+	authz := "Bearer " + mint(time.Unix(1700000000, 0), "kid-1", "sub-1")
+	_ = provisionCaller(t, h, authz, "alice1@example.com")
+
+	// Create draft.
+	reqCreate := httptest.NewRequest(http.MethodPost, "/trips", bytes.NewBufferString(`{"name":"Trip"}`))
+	reqCreate.Header.Set("Authorization", authz)
+	reqCreate.Header.Set("Content-Type", "application/json")
+	reqCreate.Header.Set("Idempotency-Key", "k-create")
+	recCreate := httptest.NewRecorder()
+	h.ServeHTTP(recCreate, reqCreate)
+	if recCreate.Code != http.StatusCreated {
+		t.Fatalf("create status=%d body=%s", recCreate.Code, recCreate.Body.String())
+	}
+	var created struct {
+		Trip oas.TripCreated `json:"trip"`
+	}
+	_ = json.Unmarshal(recCreate.Body.Bytes(), &created)
+	tripID := created.Trip.TripId
+	if tripID == "" {
+		t.Fatalf("missing tripId")
+	}
+
+	// Update with idempotency key.
+	body1 := `{"description":"Desc","capacityRigs":2,"meetingLocation":{"label":"Meet","address":"123 Main","latitude":37.0,"longitude":-122.0}}`
+	req1 := httptest.NewRequest(http.MethodPatch, "/trips/"+tripID, bytes.NewBufferString(body1))
+	req1.Header.Set("Authorization", authz)
+	req1.Header.Set("Content-Type", "application/json")
+	req1.Header.Set("Idempotency-Key", "k-upd")
+	rec1 := httptest.NewRecorder()
+	h.ServeHTTP(rec1, req1)
+	if rec1.Code != http.StatusOK {
+		t.Fatalf("patch status=%d body=%s", rec1.Code, rec1.Body.String())
+	}
+
+	// Replay: same key + semantically same payload should return 200.
+	body2 := `{"description":"Desc","capacityRigs":2,"meetingLocation":{"label":"Meet","address":"123 Main","latitude":37.0,"longitude":-122.0}}`
+	req2 := httptest.NewRequest(http.MethodPatch, "/trips/"+tripID, bytes.NewBufferString(body2))
+	req2.Header.Set("Authorization", authz)
+	req2.Header.Set("Content-Type", "application/json")
+	req2.Header.Set("Idempotency-Key", "k-upd")
+	rec2 := httptest.NewRecorder()
+	h.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("patch2 status=%d body=%s", rec2.Code, rec2.Body.String())
+	}
+
+	// Conflict: same key + different payload should 409.
+	body3 := `{"description":"Different"}`
+	req3 := httptest.NewRequest(http.MethodPatch, "/trips/"+tripID, bytes.NewBufferString(body3))
+	req3.Header.Set("Authorization", authz)
+	req3.Header.Set("Content-Type", "application/json")
+	req3.Header.Set("Idempotency-Key", "k-upd")
+	rec3 := httptest.NewRecorder()
+	h.ServeHTTP(rec3, req3)
+	if rec3.Code != http.StatusConflict {
+		t.Fatalf("patch3 status=%d body=%s", rec3.Code, rec3.Body.String())
+	}
+}
+
+func TestTrips_PublishAndCancel_HappyPathAndCancelIdempotency(t *testing.T) {
+	t.Parallel()
+
+	h, mint, _, _ := newTestTripRouter(t)
+	authz := "Bearer " + mint(time.Unix(1700000000, 0), "kid-1", "sub-1")
+	_ = provisionCaller(t, h, authz, "alice1@example.com")
+
+	// Create draft.
+	reqCreate := httptest.NewRequest(http.MethodPost, "/trips", bytes.NewBufferString(`{"name":"Snow Run"}`))
+	reqCreate.Header.Set("Authorization", authz)
+	reqCreate.Header.Set("Content-Type", "application/json")
+	reqCreate.Header.Set("Idempotency-Key", "k-create2")
+	recCreate := httptest.NewRecorder()
+	h.ServeHTTP(recCreate, reqCreate)
+	if recCreate.Code != http.StatusCreated {
+		t.Fatalf("create status=%d body=%s", recCreate.Code, recCreate.Body.String())
+	}
+	var created struct {
+		Trip oas.TripCreated `json:"trip"`
+	}
+	_ = json.Unmarshal(recCreate.Body.Bytes(), &created)
+	tripID := created.Trip.TripId
+
+	// Make public.
+	reqVis := httptest.NewRequest(http.MethodPut, "/trips/"+tripID+"/draft-visibility", bytes.NewBufferString(`{"draftVisibility":"PUBLIC"}`))
+	reqVis.Header.Set("Authorization", authz)
+	reqVis.Header.Set("Content-Type", "application/json")
+	reqVis.Header.Set("Idempotency-Key", "k-vis2")
+	recVis := httptest.NewRecorder()
+	h.ServeHTTP(recVis, reqVis)
+	if recVis.Code != http.StatusOK {
+		t.Fatalf("vis status=%d body=%s", recVis.Code, recVis.Body.String())
+	}
+
+	// Fill required publish fields.
+	reqUpd := httptest.NewRequest(http.MethodPatch, "/trips/"+tripID, bytes.NewBufferString(`{
+		"description":"Fun trip",
+		"startDate":"2026-04-01",
+		"endDate":"2026-04-02",
+		"capacityRigs":5,
+		"difficultyText":"Easy",
+		"commsRequirementsText":"FRS",
+		"recommendedRequirementsText":"Spare tire",
+		"meetingLocation":{"label":"Meet","address":"Trailhead"}
+	}`))
+	reqUpd.Header.Set("Authorization", authz)
+	reqUpd.Header.Set("Content-Type", "application/json")
+	reqUpd.Header.Set("Idempotency-Key", "k-upd2")
+	recUpd := httptest.NewRecorder()
+	h.ServeHTTP(recUpd, reqUpd)
+	if recUpd.Code != http.StatusOK {
+		t.Fatalf("upd status=%d body=%s", recUpd.Code, recUpd.Body.String())
+	}
+
+	// Publish.
+	reqPub := httptest.NewRequest(http.MethodPost, "/trips/"+tripID+"/publish", nil)
+	reqPub.Header.Set("Authorization", authz)
+	recPub := httptest.NewRecorder()
+	h.ServeHTTP(recPub, reqPub)
+	if recPub.Code != http.StatusOK {
+		t.Fatalf("publish status=%d body=%s", recPub.Code, recPub.Body.String())
+	}
+	var pub struct {
+		Trip             oas.TripDetails `json:"trip"`
+		AnnouncementCopy string          `json:"announcementCopy"`
+	}
+	if err := json.Unmarshal(recPub.Body.Bytes(), &pub); err != nil {
+		t.Fatalf("decode publish: %v", err)
+	}
+	if pub.Trip.Status != "PUBLISHED" || pub.AnnouncementCopy == "" {
+		t.Fatalf("pub=%+v", pub)
+	}
+
+	// Cancel with idempotency key and replay.
+	reqCancel := httptest.NewRequest(http.MethodPost, "/trips/"+tripID+"/cancel", nil)
+	reqCancel.Header.Set("Authorization", authz)
+	reqCancel.Header.Set("Idempotency-Key", "k-cancel")
+	recCancel := httptest.NewRecorder()
+	h.ServeHTTP(recCancel, reqCancel)
+	if recCancel.Code != http.StatusOK {
+		t.Fatalf("cancel status=%d body=%s", recCancel.Code, recCancel.Body.String())
+	}
+
+	reqCancel2 := httptest.NewRequest(http.MethodPost, "/trips/"+tripID+"/cancel", nil)
+	reqCancel2.Header.Set("Authorization", authz)
+	reqCancel2.Header.Set("Idempotency-Key", "k-cancel")
+	recCancel2 := httptest.NewRecorder()
+	h.ServeHTTP(recCancel2, reqCancel2)
+	if recCancel2.Code != http.StatusOK {
+		t.Fatalf("cancel2 status=%d body=%s", recCancel2.Code, recCancel2.Body.String())
+	}
+}

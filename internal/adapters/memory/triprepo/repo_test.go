@@ -124,3 +124,57 @@ func TestRepo_Save_UpsertsAndRejectsEmptyID(t *testing.T) {
 		t.Fatalf("got.Name=%v", got.Name)
 	}
 }
+
+func TestRepo_ReadsClonePointersAndLocation(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	r := NewRepo()
+
+	name := "Trip"
+	cap := 5
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	addr := "123 Main"
+	lat := 37.0
+	lng := -122.0
+	loc := &domain.Location{Label: "Meet", Address: &addr, Latitude: &lat, Longitude: &lng}
+
+	tp := triprepo.Trip{
+		ID:              "t1",
+		Status:          triprepo.StatusPublished,
+		Name:            &name,
+		CapacityRigs:    &cap,
+		StartDate:       &start,
+		MeetingLocation: loc,
+		CreatedAt:       time.Unix(1, 0).UTC(),
+		UpdatedAt:       time.Unix(1, 0).UTC(),
+	}
+	if err := r.Create(ctx, tp); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	got, err := r.GetByID(ctx, "t1")
+	if err != nil {
+		t.Fatalf("GetByID: %v", err)
+	}
+	if got.CapacityRigs == nil || *got.CapacityRigs != 5 {
+		t.Fatalf("capacity=%v", got.CapacityRigs)
+	}
+	if got.StartDate == nil || got.StartDate.UTC().Format("2006-01-02") != "2026-01-01" {
+		t.Fatalf("startDate=%v", got.StartDate)
+	}
+	if got.MeetingLocation == nil || got.MeetingLocation.Address == nil || *got.MeetingLocation.Address != "123 Main" {
+		t.Fatalf("location=%+v", got.MeetingLocation)
+	}
+
+	// Mutate returned pointers; stored data should not change.
+	*got.CapacityRigs = 99
+	*got.MeetingLocation.Address = "Changed"
+	got2, _ := r.GetByID(ctx, "t1")
+	if got2.CapacityRigs == nil || *got2.CapacityRigs != 5 {
+		t.Fatalf("expected clone for capacity, got=%v", got2.CapacityRigs)
+	}
+	if got2.MeetingLocation == nil || got2.MeetingLocation.Address == nil || *got2.MeetingLocation.Address != "123 Main" {
+		t.Fatalf("expected clone for location, got=%+v", got2.MeetingLocation)
+	}
+}

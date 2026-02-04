@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -19,6 +20,7 @@ import (
 	"github.com/Overland-East-Bay/trip-planner-api/internal/platform/auth/jwks_testutil"
 	"github.com/Overland-East-Bay/trip-planner-api/internal/platform/auth/jwtverifier"
 	"github.com/Overland-East-Bay/trip-planner-api/internal/platform/config"
+	portmemberrepo "github.com/Overland-East-Bay/trip-planner-api/internal/ports/out/memberrepo"
 )
 
 type fixedClockMembers struct{ t time.Time }
@@ -236,5 +238,111 @@ func TestMembers_DeleteMe_200_ThenGetMe_404(t *testing.T) {
 	h.ServeHTTP(rec2, req2)
 	if rec2.Code != http.StatusNotFound {
 		t.Fatalf("get status=%d body=%s", rec2.Code, rec2.Body.String())
+	}
+}
+
+func TestMembers_ListAndSearchMembers_ProvisioningAndIncludeInactive(t *testing.T) {
+	t.Parallel()
+
+	h, mint, _, memberRepo := newTestTripRouter(t)
+	authz := "Bearer " + mint(time.Unix(1700000000, 0), "kid-1", "sub-1")
+
+	// Must be provisioned to access the directory.
+	req0 := httptest.NewRequest(http.MethodGet, "/members", nil)
+	req0.Header.Set("Authorization", authz)
+	rec0 := httptest.NewRecorder()
+	h.ServeHTTP(rec0, req0)
+	if rec0.Code != http.StatusUnauthorized {
+		t.Fatalf("status=%d body=%s", rec0.Code, rec0.Body.String())
+	}
+
+	_ = provisionCaller(t, h, authz, "alice1@example.com")
+
+	// Add another inactive member directly.
+	now := time.Unix(200, 0).UTC()
+	_ = memberRepo.Create(context.Background(), portmemberrepo.Member{
+		ID:          "m2",
+		Subject:     "sub-2",
+		DisplayName: "Bob",
+		Email:       "bob@example.com",
+		IsActive:    false,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	})
+
+	req1 := httptest.NewRequest(http.MethodGet, "/members", nil)
+	req1.Header.Set("Authorization", authz)
+	rec1 := httptest.NewRecorder()
+	h.ServeHTTP(rec1, req1)
+	if rec1.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec1.Code, rec1.Body.String())
+	}
+	var list1 struct {
+		Members []oas.MemberDirectoryEntry `json:"members"`
+	}
+	if err := json.Unmarshal(rec1.Body.Bytes(), &list1); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(list1.Members) != 1 {
+		t.Fatalf("len=%d want=1", len(list1.Members))
+	}
+
+	req2 := httptest.NewRequest(http.MethodGet, "/members?includeInactive=true", nil)
+	req2.Header.Set("Authorization", authz)
+	rec2 := httptest.NewRecorder()
+	h.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec2.Code, rec2.Body.String())
+	}
+	var list2 struct {
+		Members []oas.MemberDirectoryEntry `json:"members"`
+	}
+	if err := json.Unmarshal(rec2.Body.Bytes(), &list2); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(list2.Members) != 2 {
+		t.Fatalf("len=%d want=2", len(list2.Members))
+	}
+
+	// Search should validate min length (422), then succeed.
+	reqBad := httptest.NewRequest(http.MethodGet, "/members/search?q=ab", nil)
+	reqBad.Header.Set("Authorization", authz)
+	recBad := httptest.NewRecorder()
+	h.ServeHTTP(recBad, reqBad)
+	if recBad.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status=%d body=%s", recBad.Code, recBad.Body.String())
+	}
+
+	// Add an active member that matches.
+	_ = memberRepo.Create(context.Background(), portmemberrepo.Member{
+		ID:          "m3",
+		Subject:     "sub-3",
+		DisplayName: "Alice Smith",
+		Email:       "alice2@example.com",
+		IsActive:    true,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	})
+	reqOK := httptest.NewRequest(http.MethodGet, "/members/search?q=ali", nil)
+	reqOK.Header.Set("Authorization", authz)
+	recOK := httptest.NewRecorder()
+	h.ServeHTTP(recOK, reqOK)
+	if recOK.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", recOK.Code, recOK.Body.String())
+	}
+	var search struct {
+		Members []oas.MemberDirectoryEntry `json:"members"`
+	}
+	if err := json.Unmarshal(recOK.Body.Bytes(), &search); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	found := false
+	for _, m := range search.Members {
+		if m.MemberId == "m3" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected to find m3 in results, members=%v", search.Members)
 	}
 }
