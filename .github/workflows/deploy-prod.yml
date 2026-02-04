@@ -1,0 +1,117 @@
+name: deploy-prod
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to deploy (defaults to commit SHA)"
+        required: false
+        type: string
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: prod
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_STATE_LOCK_TABLE: ${{ vars.TF_STATE_LOCK_TABLE }}
+      PROJECT_NAME: ${{ vars.PROJECT_NAME }}
+      IMAGE_TAG_INPUT: ${{ inputs.image_tag }}
+      TF_IN_AUTOMATION: true
+      TF_VAR_jwt_issuer: ${{ vars.JWT_ISSUER }}
+      TF_VAR_jwt_audience: ${{ vars.JWT_AUDIENCE }}
+      TF_VAR_jwt_jwks_url: ${{ vars.JWT_JWKS_URL }}
+      TF_VAR_public_base_url: ${{ vars.PUBLIC_BASE_URL }}
+      TF_VAR_domain_name: ${{ vars.DOMAIN_NAME }}
+      TF_VAR_certificate_arn: ${{ vars.CERTIFICATE_ARN }}
+      TF_VAR_create_acm_certificate: ${{ vars.CREATE_ACM_CERTIFICATE }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set deployment variables
+        run: |
+          PROJECT_NAME="${PROJECT_NAME:-trip-planner-api}"
+          if [ -n "${IMAGE_TAG_INPUT}" ]; then
+            IMAGE_TAG="${IMAGE_TAG_INPUT}"
+          else
+            IMAGE_TAG="${GITHUB_SHA}"
+          fi
+          echo "PROJECT_NAME=${PROJECT_NAME}" >> "${GITHUB_ENV}"
+          echo "TF_VAR_project_name=${PROJECT_NAME}" >> "${GITHUB_ENV}"
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> "${GITHUB_ENV}"
+          echo "TF_VAR_image_tag=${IMAGE_TAG}" >> "${GITHUB_ENV}"
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: trip-planner-api-prod-deploy
+
+      - name: Terraform init
+        working-directory: infra/aws/envs/prod
+        run: |
+          terraform init \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="key=aws/prod/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="dynamodb_table=${TF_STATE_LOCK_TABLE}" \
+            -backend-config="encrypt=true"
+
+      - name: Check ECS service exists
+        id: ecs
+        run: |
+          PROJECT_NAME="${PROJECT_NAME:-trip-planner-api}"
+          CLUSTER="${PROJECT_NAME}-prod"
+          SERVICE="${PROJECT_NAME}-prod"
+          STATUS=$(aws ecs describe-services \
+            --cluster "${CLUSTER}" \
+            --services "${SERVICE}" \
+            --query "services[0].status" \
+            --output text 2>/dev/null || true)
+          if [ "${STATUS}" = "ACTIVE" ]; then
+            echo "exists=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "exists=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Bootstrap infra (first deploy only)
+        if: steps.ecs.outputs.exists != 'true'
+        working-directory: infra/aws/envs/prod
+        run: |
+          terraform apply -auto-approve -var "desired_count=0"
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        env:
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          PROJECT_NAME="${PROJECT_NAME:-trip-planner-api}"
+          REPOSITORY="${PROJECT_NAME}-prod"
+          docker build -t "${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}" .
+          docker push "${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}"
+
+      - name: Terraform apply
+        working-directory: infra/aws/envs/prod
+        run: |
+          terraform apply -auto-approve
