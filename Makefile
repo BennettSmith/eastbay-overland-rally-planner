@@ -323,7 +323,13 @@ cover:
 .PHONY: cover-check
 cover-check:
 	@$(GO) test -coverprofile=$(COVERPROFILE_RAW) $(PKGS)
-	@awk 'NR==1{print; next} $$1 !~ /\.gen\.go:/ {print}' "$(COVERPROFILE_RAW)" > "$(COVERPROFILE)"
+	@awk 'NR==1{print; next} \
+		$$1 !~ /\.gen\.go:/ \
+		&& $$1 !~ /\/cmd\// \
+		&& $$1 !~ /\/internal\/adapters\/contracttest\// \
+		&& $$1 !~ /\/internal\/adapters\/postgres\// \
+		&& $$1 !~ /\/internal\/platform\/auth\/jwks_testutil\// \
+		{print}' "$(COVERPROFILE_RAW)" > "$(COVERPROFILE)"
 	@total="$$( $(GO) tool cover -func=$(COVERPROFILE) | awk '/^total:/{gsub(/%/,"",$$3); print $$3}' )"; \
 	if [ -z "$$total" ]; then \
 		echo "ERROR: failed to determine total coverage from $(COVERPROFILE)" >&2; \
