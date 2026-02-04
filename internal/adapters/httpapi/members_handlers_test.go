@@ -346,3 +346,55 @@ func TestMembers_ListAndSearchMembers_ProvisioningAndIncludeInactive(t *testing.
 		t.Fatalf("expected to find m3 in results, members=%v", search.Members)
 	}
 }
+
+func TestMembers_VehicleProfile_CreateGetAndPatch(t *testing.T) {
+	t.Parallel()
+
+	h, mint := newTestMemberRouter(t)
+	authz := "Bearer " + mint(time.Unix(1700000000, 0), "kid-1")
+
+	// Create with vehicleProfile.
+	createBody := `{
+		"displayName":"Alice",
+		"email":"alice@example.com",
+		"vehicleProfile":{"make":"Toyota","model":"4Runner","notes":"hello"}
+	}`
+	req := httptest.NewRequest(http.MethodPost, "/members", bytes.NewBufferString(createBody))
+	req.Header.Set("Authorization", authz)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	// Get should include the vehicle profile.
+	reqGet := httptest.NewRequest(http.MethodGet, "/members/me", nil)
+	reqGet.Header.Set("Authorization", authz)
+	recGet := httptest.NewRecorder()
+	h.ServeHTTP(recGet, reqGet)
+	if recGet.Code != http.StatusOK {
+		t.Fatalf("get status=%d body=%s", recGet.Code, recGet.Body.String())
+	}
+	var got struct {
+		Member oas.MemberProfile `json:"member"`
+	}
+	if err := json.Unmarshal(recGet.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode get: %v", err)
+	}
+	if got.Member.VehicleProfile == nil {
+		t.Fatalf("expected vehicleProfile present")
+	}
+
+	// Patch vehicle profile fields (null + value).
+	patchBody := `{"vehicleProfile":{"make":null,"model":"Tacoma"}}`
+	reqPatch := httptest.NewRequest(http.MethodPatch, "/members/me", bytes.NewBufferString(patchBody))
+	reqPatch.Header.Set("Authorization", authz)
+	reqPatch.Header.Set("Content-Type", "application/json")
+	reqPatch.Header.Set("Idempotency-Key", "idem-vp-1")
+	recPatch := httptest.NewRecorder()
+	h.ServeHTTP(recPatch, reqPatch)
+	if recPatch.Code != http.StatusOK {
+		t.Fatalf("patch status=%d body=%s", recPatch.Code, recPatch.Body.String())
+	}
+}

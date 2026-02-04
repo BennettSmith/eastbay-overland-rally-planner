@@ -619,7 +619,7 @@ func TestTrips_UpdateTrip_IdempotencyReplayAndConflict(t *testing.T) {
 	}
 
 	// Update with idempotency key.
-	body1 := `{"description":"Desc","capacityRigs":2,"meetingLocation":{"label":"Meet","address":"123 Main","latitude":37.0,"longitude":-122.0}}`
+	body1 := `{"description":"Desc","capacityRigs":2,"artifactIds":[],"meetingLocation":{"label":"Meet","address":"123 Main","latitudeLongitude":{"latitude":37.0,"longitude":-122.0}}}`
 	req1 := httptest.NewRequest(http.MethodPatch, "/trips/"+tripID, bytes.NewBufferString(body1))
 	req1.Header.Set("Authorization", authz)
 	req1.Header.Set("Content-Type", "application/json")
@@ -631,7 +631,7 @@ func TestTrips_UpdateTrip_IdempotencyReplayAndConflict(t *testing.T) {
 	}
 
 	// Replay: same key + semantically same payload should return 200.
-	body2 := `{"description":"Desc","capacityRigs":2,"meetingLocation":{"label":"Meet","address":"123 Main","latitude":37.0,"longitude":-122.0}}`
+	body2 := `{"description":"Desc","capacityRigs":2,"artifactIds":[],"meetingLocation":{"label":"Meet","address":"123 Main","latitudeLongitude":{"latitude":37.0,"longitude":-122.0}}}`
 	req2 := httptest.NewRequest(http.MethodPatch, "/trips/"+tripID, bytes.NewBufferString(body2))
 	req2.Header.Set("Authorization", authz)
 	req2.Header.Set("Content-Type", "application/json")

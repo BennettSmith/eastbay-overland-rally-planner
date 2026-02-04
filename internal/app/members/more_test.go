@@ -154,6 +154,32 @@ func TestService_UpdateMyMemberProfile_EmailUniquenessAndVehicleProfilePatch(t *
 	}
 }
 
+func TestService_SearchMembers_TrimsAndRespectsLimit(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	repo := memmemberrepo.NewRepo()
+	clk := memclock.NewManualClock(time.Unix(100, 0).UTC())
+	svc := NewService(repo, clk)
+	svc.SearchLimit = 1
+
+	now := clk.Now()
+	_ = repo.Create(ctx, portmemberrepo.Member{ID: "m1", Subject: "sub-1", DisplayName: "Alice Smith", Email: "a1@example.com", IsActive: true, CreatedAt: now, UpdatedAt: now})
+	_ = repo.Create(ctx, portmemberrepo.Member{ID: "m2", Subject: "sub-2", DisplayName: "Alice Jones", Email: "a2@example.com", IsActive: true, CreatedAt: now, UpdatedAt: now})
+	_ = repo.Create(ctx, portmemberrepo.Member{ID: "m3", Subject: "sub-3", DisplayName: "Bob", Email: "b@example.com", IsActive: true, CreatedAt: now, UpdatedAt: now})
+
+	got, err := svc.SearchMembers(ctx, "  ali  ")
+	if err != nil {
+		t.Fatalf("SearchMembers: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len=%d want=1", len(got))
+	}
+	if got[0].ID != "m1" && got[0].ID != "m2" {
+		t.Fatalf("unexpected member: %+v", got[0])
+	}
+}
+
 func TestService_AnonymizeAndDeactivateMyMember_ScrubsFields(t *testing.T) {
 	t.Parallel()
 
