@@ -747,3 +747,66 @@ func TestTrips_PublishAndCancel_HappyPathAndCancelIdempotency(t *testing.T) {
 		t.Fatalf("cancel2 status=%d body=%s", recCancel2.Code, recCancel2.Body.String())
 	}
 }
+
+func TestTrips_PublishTrip_ErrorCases_PrivateDraftMissingFieldsAndNotOrganizer(t *testing.T) {
+	t.Parallel()
+
+	h, mint, _, _ := newTestTripRouter(t)
+	authz1 := "Bearer " + mint(time.Unix(1700000000, 0), "kid-1", "sub-1")
+	authz2 := "Bearer " + mint(time.Unix(1700000000, 0), "kid-1", "sub-2")
+	_ = provisionCaller(t, h, authz1, "alice1@example.com")
+	_ = provisionCaller(t, h, authz2, "bob2@example.com")
+
+	// Create a private draft (default) as member1.
+	reqCreate := httptest.NewRequest(http.MethodPost, "/trips", bytes.NewBufferString(`{"name":"Trip"}`))
+	reqCreate.Header.Set("Authorization", authz1)
+	reqCreate.Header.Set("Content-Type", "application/json")
+	reqCreate.Header.Set("Idempotency-Key", "k-create3")
+	recCreate := httptest.NewRecorder()
+	h.ServeHTTP(recCreate, reqCreate)
+	if recCreate.Code != http.StatusCreated {
+		t.Fatalf("create status=%d body=%s", recCreate.Code, recCreate.Body.String())
+	}
+	var created struct {
+		Trip oas.TripCreated `json:"trip"`
+	}
+	_ = json.Unmarshal(recCreate.Body.Bytes(), &created)
+	tripID := created.Trip.TripId
+
+	// Private drafts cannot be published.
+	reqPub1 := httptest.NewRequest(http.MethodPost, "/trips/"+tripID+"/publish", nil)
+	reqPub1.Header.Set("Authorization", authz1)
+	recPub1 := httptest.NewRecorder()
+	h.ServeHTTP(recPub1, reqPub1)
+	if recPub1.Code != http.StatusConflict {
+		t.Fatalf("publish private status=%d body=%s", recPub1.Code, recPub1.Body.String())
+	}
+
+	// Make public but still missing required publish fields => 409.
+	reqVis := httptest.NewRequest(http.MethodPut, "/trips/"+tripID+"/draft-visibility", bytes.NewBufferString(`{"draftVisibility":"PUBLIC"}`))
+	reqVis.Header.Set("Authorization", authz1)
+	reqVis.Header.Set("Content-Type", "application/json")
+	reqVis.Header.Set("Idempotency-Key", "k-vis3")
+	recVis := httptest.NewRecorder()
+	h.ServeHTTP(recVis, reqVis)
+	if recVis.Code != http.StatusOK {
+		t.Fatalf("vis status=%d body=%s", recVis.Code, recVis.Body.String())
+	}
+
+	reqPub2 := httptest.NewRequest(http.MethodPost, "/trips/"+tripID+"/publish", nil)
+	reqPub2.Header.Set("Authorization", authz1)
+	recPub2 := httptest.NewRecorder()
+	h.ServeHTTP(recPub2, reqPub2)
+	if recPub2.Code != http.StatusConflict {
+		t.Fatalf("publish missing fields status=%d body=%s", recPub2.Code, recPub2.Body.String())
+	}
+
+	// Not organizer should see 404 even if draft is public.
+	reqPub3 := httptest.NewRequest(http.MethodPost, "/trips/"+tripID+"/publish", nil)
+	reqPub3.Header.Set("Authorization", authz2)
+	recPub3 := httptest.NewRecorder()
+	h.ServeHTTP(recPub3, reqPub3)
+	if recPub3.Code != http.StatusNotFound {
+		t.Fatalf("publish not organizer status=%d body=%s", recPub3.Code, recPub3.Body.String())
+	}
+}

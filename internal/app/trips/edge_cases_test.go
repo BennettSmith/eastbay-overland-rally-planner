@@ -245,3 +245,252 @@ func TestService_DeleteAllRSVPsByMember_UpdatesAttendanceUsingRepoCounts(t *test
 		t.Fatalf("attending=%v want=1", t1.AttendingRigs)
 	}
 }
+
+func TestService_NewService_DefaultTripIDGeneratorProducesNonEmptyID(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	membersRepo := memmemberrepo.NewRepo()
+	tripsRepo := memtriprepo.NewRepo()
+	rsvpsRepo := memrsvprepo.NewRepo()
+	provisionMember(t, membersRepo, "m1")
+
+	svc := trips.NewService(tripsRepo, membersRepo, rsvpsRepo)
+	created, err := svc.CreateTripDraft(ctx, "m1", trips.CreateTripDraftInput{Name: "Trip"})
+	if err != nil {
+		t.Fatalf("CreateTripDraft: %v", err)
+	}
+	if created.ID == "" {
+		t.Fatalf("expected non-empty id")
+	}
+}
+
+func TestService_GetTripRSVPSummary_NotVisibleReturns404(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	membersRepo := memmemberrepo.NewRepo()
+	tripsRepo := memtriprepo.NewRepo()
+	rsvpsRepo := memrsvprepo.NewRepo()
+	provisionMember(t, membersRepo, "m1")
+	provisionMember(t, membersRepo, "m2")
+
+	svc := trips.NewService(tripsRepo, membersRepo, rsvpsRepo)
+
+	name := "Draft"
+	now := time.Unix(6, 0).UTC()
+	_ = tripsRepo.Create(ctx, porttriprepo.Trip{
+		ID:                 "td-private",
+		Status:             porttriprepo.StatusDraft,
+		Name:               &name,
+		CreatorMemberID:    "m2",
+		OrganizerMemberIDs: []domain.MemberID{"m2"},
+		DraftVisibility:    porttriprepo.DraftVisibilityPrivate,
+		CreatedAt:          now,
+		UpdatedAt:          now,
+	})
+
+	_, err := svc.GetTripRSVPSummary(ctx, "m1", "td-private")
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	ae := (*trips.Error)(nil)
+	if !errors.As(err, &ae) || ae.Status != 404 {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestService_UpdateTrip_ClearsMeetingLocationWithNull(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	membersRepo := memmemberrepo.NewRepo()
+	tripsRepo := memtriprepo.NewRepo()
+	rsvpsRepo := memrsvprepo.NewRepo()
+	provisionMember(t, membersRepo, "m1")
+
+	svc := trips.NewService(tripsRepo, membersRepo, rsvpsRepo)
+
+	name := "Trip"
+	now := time.Unix(7, 0).UTC()
+	addr := "123 Main"
+	_ = tripsRepo.Create(ctx, porttriprepo.Trip{
+		ID:                 "tp",
+		Status:             porttriprepo.StatusDraft,
+		Name:               &name,
+		CreatorMemberID:    "m1",
+		OrganizerMemberIDs: []domain.MemberID{"m1"},
+		DraftVisibility:    porttriprepo.DraftVisibilityPublic,
+		MeetingLocation:    &domain.Location{Label: "Meet", Address: &addr},
+		CreatedAt:          now,
+		UpdatedAt:          now,
+	})
+
+	td, err := svc.UpdateTrip(ctx, "m1", "tp", trips.UpdateTripInput{
+		MeetingLocation: trips.Null[*trips.LocationPatch](),
+	})
+	if err != nil {
+		t.Fatalf("UpdateTrip: %v", err)
+	}
+	if td.MeetingLocation != nil {
+		t.Fatalf("expected meetingLocation cleared")
+	}
+}
+
+func TestService_CancelTrip_NonVisibleStatusReturnsNotFound(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	membersRepo := memmemberrepo.NewRepo()
+	tripsRepo := memtriprepo.NewRepo()
+	rsvpsRepo := memrsvprepo.NewRepo()
+	provisionMember(t, membersRepo, "m1")
+
+	svc := trips.NewService(tripsRepo, membersRepo, rsvpsRepo)
+
+	name := "Trip"
+	now := time.Unix(8, 0).UTC()
+	_ = tripsRepo.Create(ctx, porttriprepo.Trip{
+		ID:                 "tp",
+		Status:             porttriprepo.Status("WEIRD"),
+		Name:               &name,
+		CreatorMemberID:    "m1",
+		OrganizerMemberIDs: []domain.MemberID{"m1"},
+		DraftVisibility:    porttriprepo.DraftVisibilityPublic,
+		CreatedAt:          now,
+		UpdatedAt:          now,
+	})
+
+	_, err := svc.CancelTrip(ctx, "m1", "tp")
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	ae := (*trips.Error)(nil)
+	// Non-visible trips should fail closed as 404 (even if they exist).
+	if !errors.As(err, &ae) || ae.Status != 404 || ae.Code != "TRIP_NOT_FOUND" {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestService_UpdateTrip_DraftAuthorizationAndNameValidation(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	membersRepo := memmemberrepo.NewRepo()
+	tripsRepo := memtriprepo.NewRepo()
+	rsvpsRepo := memrsvprepo.NewRepo()
+	provisionMember(t, membersRepo, "m1")
+	provisionMember(t, membersRepo, "m2")
+
+	svc := trips.NewService(tripsRepo, membersRepo, rsvpsRepo)
+
+	name := "Trip"
+	now := time.Unix(9, 0).UTC()
+	_ = tripsRepo.Create(ctx, porttriprepo.Trip{
+		ID:                 "td-priv",
+		Status:             porttriprepo.StatusDraft,
+		Name:               &name,
+		CreatorMemberID:    "m1",
+		OrganizerMemberIDs: []domain.MemberID{"m1"},
+		DraftVisibility:    porttriprepo.DraftVisibilityPrivate,
+		CreatedAt:          now,
+		UpdatedAt:          now,
+	})
+	_ = tripsRepo.Create(ctx, porttriprepo.Trip{
+		ID:                 "td-pub",
+		Status:             porttriprepo.StatusDraft,
+		Name:               &name,
+		CreatorMemberID:    "m1",
+		OrganizerMemberIDs: []domain.MemberID{"m1"},
+		DraftVisibility:    porttriprepo.DraftVisibilityPublic,
+		CreatedAt:          now,
+		UpdatedAt:          now,
+	})
+
+	// Private draft: only creator may update.
+	_, err := svc.UpdateTrip(ctx, "m2", "td-priv", trips.UpdateTripInput{Name: trips.Some("New")})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	ae := (*trips.Error)(nil)
+	if !errors.As(err, &ae) || ae.Status != 404 {
+		t.Fatalf("err=%v", err)
+	}
+
+	// Public draft: only organizers may update.
+	_, err = svc.UpdateTrip(ctx, "m2", "td-pub", trips.UpdateTripInput{Name: trips.Some("New")})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if !errors.As(err, &ae) || ae.Status != 404 {
+		t.Fatalf("err=%v", err)
+	}
+
+	// Name cannot be null.
+	_, err = svc.UpdateTrip(ctx, "m1", "td-priv", trips.UpdateTripInput{Name: trips.Null[string]()})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if !errors.As(err, &ae) || ae.Status != 422 {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestService_UpdateTrip_CanceledCannotBeModified(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	membersRepo := memmemberrepo.NewRepo()
+	tripsRepo := memtriprepo.NewRepo()
+	rsvpsRepo := memrsvprepo.NewRepo()
+	provisionMember(t, membersRepo, "m1")
+
+	svc := trips.NewService(tripsRepo, membersRepo, rsvpsRepo)
+
+	name := "Trip"
+	now := time.Unix(10, 0).UTC()
+	_ = tripsRepo.Create(ctx, porttriprepo.Trip{
+		ID:                 "tc",
+		Status:             porttriprepo.StatusCanceled,
+		Name:               &name,
+		CreatorMemberID:    "m1",
+		OrganizerMemberIDs: []domain.MemberID{"m1"},
+		DraftVisibility:    porttriprepo.DraftVisibilityPublic,
+		CreatedAt:          now,
+		UpdatedAt:          now,
+	})
+
+	_, err := svc.UpdateTrip(ctx, "m1", "tc", trips.UpdateTripInput{Name: trips.Some("New")})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	ae := (*trips.Error)(nil)
+	if !errors.As(err, &ae) || ae.Status != 409 || ae.Code != "TRIP_CANCELED" {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestService_CreateTripDraft_IDConflictReturns409(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	membersRepo := memmemberrepo.NewRepo()
+	tripsRepo := memtriprepo.NewRepo()
+	rsvpsRepo := memrsvprepo.NewRepo()
+	provisionMember(t, membersRepo, "m1")
+
+	svc := trips.NewService(tripsRepo, membersRepo, rsvpsRepo)
+	svc.SetNewTripIDForTest(func() domain.TripID { return "fixed-id" })
+
+	if _, err := svc.CreateTripDraft(ctx, "m1", trips.CreateTripDraftInput{Name: "Trip"}); err != nil {
+		t.Fatalf("CreateTripDraft: %v", err)
+	}
+	_, err := svc.CreateTripDraft(ctx, "m1", trips.CreateTripDraftInput{Name: "Trip"})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	ae := (*trips.Error)(nil)
+	if !errors.As(err, &ae) || ae.Status != 409 || ae.Code != "TRIP_ID_CONFLICT" {
+		t.Fatalf("err=%v", err)
+	}
+}

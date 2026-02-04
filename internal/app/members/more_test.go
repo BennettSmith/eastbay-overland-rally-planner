@@ -235,3 +235,132 @@ func TestService_AnonymizeAndDeactivateMyMember_ScrubsFields(t *testing.T) {
 		t.Fatalf("err=%v", err)
 	}
 }
+
+func TestService_UpdateMyMemberProfile_ValidationsAndVehicleProfileNull(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	repo := memmemberrepo.NewRepo()
+	clk := memclock.NewManualClock(time.Unix(100, 0).UTC())
+	svc := NewService(repo, clk)
+
+	// Not provisioned.
+	_, err := svc.UpdateMyMemberProfile(ctx, "sub-missing", UpdateMyMemberProfileInput{DisplayName: Some("X")})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	ae := (*Error)(nil)
+	if !errors.As(err, &ae) || ae.Status != 404 || ae.Code != "MEMBER_NOT_PROVISIONED" {
+		t.Fatalf("err=%v", err)
+	}
+
+	// Seed a member.
+	_, err = svc.CreateMyMember(ctx, "sub-1", CreateMyMemberInput{DisplayName: "Alice", Email: "alice@example.com"})
+	if err != nil {
+		t.Fatalf("CreateMyMember: %v", err)
+	}
+
+	// displayName: null rejected.
+	_, err = svc.UpdateMyMemberProfile(ctx, "sub-1", UpdateMyMemberProfileInput{DisplayName: Null[string]()})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if !errors.As(err, &ae) || ae.Status != 422 || ae.Code != "VALIDATION_ERROR" {
+		t.Fatalf("err=%v", err)
+	}
+
+	// displayName: empty after normalization rejected.
+	_, err = svc.UpdateMyMemberProfile(ctx, "sub-1", UpdateMyMemberProfileInput{DisplayName: Some("   ")})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if !errors.As(err, &ae) || ae.Status != 422 {
+		t.Fatalf("err=%v", err)
+	}
+
+	// email: null rejected.
+	_, err = svc.UpdateMyMemberProfile(ctx, "sub-1", UpdateMyMemberProfileInput{Email: Null[string]()})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if !errors.As(err, &ae) || ae.Status != 422 {
+		t.Fatalf("err=%v", err)
+	}
+
+	// email: must be bare email (no "Name <x@y>").
+	_, err = svc.UpdateMyMemberProfile(ctx, "sub-1", UpdateMyMemberProfileInput{Email: Some("Alice <alice@example.com>")})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if !errors.As(err, &ae) || ae.Status != 422 {
+		t.Fatalf("err=%v", err)
+	}
+
+	// groupAliasEmail: invalid rejected.
+	_, err = svc.UpdateMyMemberProfile(ctx, "sub-1", UpdateMyMemberProfileInput{GroupAliasEmail: Some("not-an-email")})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if !errors.As(err, &ae) || ae.Status != 422 {
+		t.Fatalf("err=%v", err)
+	}
+
+	// vehicleProfile: null clears.
+	updated, err := svc.UpdateMyMemberProfile(ctx, "sub-1", UpdateMyMemberProfileInput{VehicleProfile: Null[VehicleProfilePatch]()})
+	if err != nil {
+		t.Fatalf("UpdateMyMemberProfile(vehicleProfile=null): %v", err)
+	}
+	if updated.VehicleProfile != nil {
+		t.Fatalf("expected vehicleProfile cleared")
+	}
+}
+
+func TestService_CreateMyMember_Validations(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	repo := memmemberrepo.NewRepo()
+	clk := memclock.NewManualClock(time.Unix(100, 0).UTC())
+	svc := NewService(repo, clk)
+
+	// displayName required.
+	_, err := svc.CreateMyMember(ctx, "sub-1", CreateMyMemberInput{DisplayName: "   ", Email: "a@example.com"})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	ae := (*Error)(nil)
+	if !errors.As(err, &ae) || ae.Status != 422 || ae.Code != "VALIDATION_ERROR" {
+		t.Fatalf("err=%v", err)
+	}
+
+	// email required.
+	_, err = svc.CreateMyMember(ctx, "sub-2", CreateMyMemberInput{DisplayName: "Alice", Email: ""})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if !errors.As(err, &ae) || ae.Status != 422 {
+		t.Fatalf("err=%v", err)
+	}
+
+	// email must be bare (covers validateEmail addr.Address != email).
+	_, err = svc.CreateMyMember(ctx, "sub-3", CreateMyMemberInput{DisplayName: "Alice", Email: "Alice <alice@example.com>"})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if !errors.As(err, &ae) || ae.Status != 422 {
+		t.Fatalf("err=%v", err)
+	}
+
+	// uniqueness across different subject IDs.
+	_, err = svc.CreateMyMember(ctx, "sub-4", CreateMyMemberInput{DisplayName: "A", Email: "dup@example.com"})
+	if err != nil {
+		t.Fatalf("CreateMyMember: %v", err)
+	}
+	_, err = svc.CreateMyMember(ctx, "sub-5", CreateMyMemberInput{DisplayName: "B", Email: "DUP@example.com"})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if !errors.As(err, &ae) || ae.Status != 409 || ae.Code != "EMAIL_ALREADY_IN_USE" {
+		t.Fatalf("err=%v", err)
+	}
+}
