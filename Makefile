@@ -122,6 +122,7 @@ help:
 	@echo "  cover          Run tests with coverage (writes coverage.out; prints summary)"
 	@echo "  cover-html     Generate coverage.html from coverage.out"
 	@echo "  cover-check    Run tests and fail if total coverage < MIN_COVERAGE (default: 85.0)"
+	@echo "  cover-clean    Delete local coverage artifacts (coverage/ + legacy root files)"
 	@echo ""
 	@echo "  gen-openapi    Generate Go server stubs + types from OpenAPI spec"
 	@echo ""
@@ -267,10 +268,11 @@ gen-openapi:
 GO ?= go
 PKGS ?= ./...
 
-COVERPROFILE ?= coverage.out
-COVERHTML ?= coverage.html
+COVER_DIR ?= coverage
+COVERPROFILE ?= $(COVER_DIR)/coverage.out
+COVERHTML ?= $(COVER_DIR)/coverage.html
 MIN_COVERAGE ?= 85.0
-COVERPROFILE_RAW ?= coverage.raw.out
+COVERPROFILE_RAW ?= $(COVER_DIR)/coverage.raw.out
 
 # COVERPKG instruments packages so higher-level tests contribute to core coverage.
 # We exclude:
@@ -333,11 +335,13 @@ itest-all:
 
 .PHONY: cover
 cover:
+	@mkdir -p "$(COVER_DIR)"
 	@$(GO) test -coverprofile=$(COVERPROFILE) $(PKGS)
 	@$(GO) tool cover -func=$(COVERPROFILE)
 
 .PHONY: cover-check
 cover-check:
+	@mkdir -p "$(COVER_DIR)"
 	@$(GO) test -coverpkg="$(COVERPKG)" -coverprofile=$(COVERPROFILE_RAW) $(PKGS)
 	@awk 'NR==1{print; next} \
 		$$1 !~ /\.gen\.go:/ \
@@ -361,6 +365,12 @@ cover-check:
 cover-html: cover
 	@$(GO) tool cover -html=$(COVERPROFILE) -o $(COVERHTML)
 	@echo "Wrote $(COVERHTML)"
+
+.PHONY: cover-clean
+cover-clean:
+	@rm -f coverage*.out coverage*.raw.out coverage*.html coverage.html
+	@rm -f "$(COVER_DIR)"/*.out "$(COVER_DIR)"/*.html 2>/dev/null || true
+	@rmdir "$(COVER_DIR)" 2>/dev/null || true
 
 # --- Docker image helpers (outside compose) ---
 
