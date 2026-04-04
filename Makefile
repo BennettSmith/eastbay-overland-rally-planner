@@ -115,14 +115,20 @@ help:
 	@echo "  vet            Run go vet (./...)"
 	@echo "  test           Run Go unit tests (./...)"
 	@echo "  build          Compile all packages (./...)"
-	@echo "  ci             Run the repo's 'green' gate (format-check + vet + tests + build + changelog/spec.lock)"
+	@echo "  ci             Run the repo's 'green' gate (changelog/spec.lock + fmt-check + vet + coverage gate + build)"
 	@echo "  itest          Run HTTP API integration tests (memory backend)"
 	@echo "  itest-postgres Run HTTP API integration tests (postgres backend; requires db)"
 	@echo "  itest-all      Run HTTP API integration tests (all backends)"
 	@echo "  cover          Run tests with coverage (writes coverage.out; prints summary)"
 	@echo "  cover-html     Generate coverage.html from coverage.out"
+	@echo "  cover-check    Run tests and fail if total coverage < MIN_COVERAGE (default: 85.0)"
+	@echo "  cover-clean    Delete local coverage artifacts (coverage/ + legacy root files)"
 	@echo ""
 	@echo "  gen-openapi    Generate Go server stubs + types from OpenAPI spec"
+	@echo ""
+	@echo "  tf-init-local  Terraform init (infra/local) for LocalStack rehearsal"
+	@echo "  tf-apply-local Terraform apply (infra/local) for LocalStack rehearsal"
+	@echo "  tf-destroy-local Terraform destroy (infra/local) for LocalStack rehearsal"
 	@echo ""
 	@echo "Vars (override like: make up POSTGRES_PORT=5433):"
 	@echo "  POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB POSTGRES_PORT SEED_FILE DATABASE_URL"
@@ -262,8 +268,27 @@ gen-openapi:
 GO ?= go
 PKGS ?= ./...
 
-COVERPROFILE ?= coverage.out
-COVERHTML ?= coverage.html
+COVER_DIR ?= coverage
+COVERPROFILE ?= $(COVER_DIR)/coverage.out
+COVERHTML ?= $(COVER_DIR)/coverage.html
+MIN_COVERAGE ?= 85.0
+COVERPROFILE_RAW ?= $(COVER_DIR)/coverage.raw.out
+
+# COVERPKG instruments packages so higher-level tests contribute to core coverage.
+# We exclude:
+# - cmd/ binaries (no tests)
+# - postgres adapters (integration-tested elsewhere)
+# - contracttest helpers
+# - jwks_testutil (test-only helper package)
+# - httpapi/oas (generated)
+COVERPKG ?= $(shell $(GO) list ./... | awk 'BEGIN{first=1} \
+	!/\/cmd\// \
+	&& !/\/internal\/adapters\/postgres/ \
+	&& !/\/internal\/adapters\/contracttest/ \
+	&& !/\/internal\/platform\/auth\/jwks_testutil/ \
+	&& !/\/internal\/adapters\/httpapi\/oas/ \
+	{ if(first){printf "%s", $$0; first=0} else {printf ",%s", $$0} } \
+	END{print ""}')
 
 .PHONY: fmt-check
 fmt-check:
@@ -294,7 +319,7 @@ build:
 	@$(GO) build $(PKGS)
 
 .PHONY: ci
-ci: changelog-verify fmt-check vet test build
+ci: changelog-verify fmt-check vet cover-check build
 
 .PHONY: itest
 itest:
@@ -310,13 +335,42 @@ itest-all:
 
 .PHONY: cover
 cover:
+	@mkdir -p "$(COVER_DIR)"
 	@$(GO) test -coverprofile=$(COVERPROFILE) $(PKGS)
 	@$(GO) tool cover -func=$(COVERPROFILE)
+
+.PHONY: cover-check
+cover-check:
+	@mkdir -p "$(COVER_DIR)"
+	@$(GO) test -coverpkg="$(COVERPKG)" -coverprofile=$(COVERPROFILE_RAW) $(PKGS)
+	@awk 'NR==1{print; next} \
+		$$1 !~ /\.gen\.go:/ \
+		&& $$1 !~ /\/cmd\// \
+		&& $$1 !~ /\/internal\/adapters\/contracttest\// \
+		&& $$1 !~ /\/internal\/adapters\/httpapi\// \
+		&& $$1 !~ /\/internal\/adapters\/postgres\// \
+		&& $$1 !~ /\/internal\/platform\/auth\/jwks_testutil\// \
+		&& $$1 !~ /\/internal\/ports\/out\// \
+		{print}' "$(COVERPROFILE_RAW)" > "$(COVERPROFILE)"
+	@total="$$( $(GO) tool cover -func=$(COVERPROFILE) | awk '/^total:/{gsub(/%/,"",$$3); print $$3}' )"; \
+	if [ -z "$$total" ]; then \
+		echo "ERROR: failed to determine total coverage from $(COVERPROFILE)" >&2; \
+		exit 1; \
+	fi; \
+	echo "Total coverage: $$total% (min $(MIN_COVERAGE)%)"; \
+	awk -v total="$$total" -v min="$(MIN_COVERAGE)" 'BEGIN { exit((total+0) < (min+0)) }' \
+	|| (echo "ERROR: coverage $$total% is below minimum $(MIN_COVERAGE)%" >&2; exit 1)
 
 .PHONY: cover-html
 cover-html: cover
 	@$(GO) tool cover -html=$(COVERPROFILE) -o $(COVERHTML)
 	@echo "Wrote $(COVERHTML)"
+
+.PHONY: cover-clean
+cover-clean:
+	@rm -f coverage*.out coverage*.raw.out coverage*.html coverage.html
+	@rm -f "$(COVER_DIR)"/*.out "$(COVER_DIR)"/*.html 2>/dev/null || true
+	@rmdir "$(COVER_DIR)" 2>/dev/null || true
 
 # --- Docker image helpers (outside compose) ---
 
@@ -353,4 +407,18 @@ release-help:
 	@echo "  2) Add Unreleased notes in CHANGELOG.md (service/runtime/migrations + Implements spec ...)"
 	@echo "  3) make changelog-release VERSION=1.0.0"
 	@echo "  4) Commit CHANGELOG.md, tag v1.0.0, push tag"
+
+# --- LocalStack rehearsal helpers ---
+
+.PHONY: tf-init-local
+tf-init-local:
+	@cd infra/local && terraform init
+
+.PHONY: tf-apply-local
+tf-apply-local:
+	@cd infra/local && terraform apply -auto-approve
+
+.PHONY: tf-destroy-local
+tf-destroy-local:
+	@cd infra/local && terraform destroy -auto-approve
 

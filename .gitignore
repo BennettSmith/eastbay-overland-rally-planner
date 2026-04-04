@@ -66,4 +66,11 @@ Desktop.ini
 .idea/
 .vscode/
 
+# =========================
+# Terraform
+# =========================
+.terraform/
+*.tfstate
+*.tfstate.*
+
 

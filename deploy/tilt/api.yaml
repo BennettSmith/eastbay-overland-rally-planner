@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: trip-planner-api
+  labels:
+    app: trip-planner-api
+spec:
+  ports:
+    - port: 8080
+      targetPort: 8080
+  selector:
+    app: trip-planner-api
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trip-planner-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trip-planner-api
+  template:
+    metadata:
+      labels:
+        app: trip-planner-api
+    spec:
+      containers:
+        - name: api
+          image: trip-planner-api-local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: PORT
+              value: "8080"
+            - name: STORAGE_BACKEND
+              value: postgres
+            - name: DATABASE_URL
+              value: postgres://eb:eb@postgres:5432/eastbay?sslmode=disable
+            - name: AUTH_MODE
+              value: dev
+            - name: DEV_SUBJECT
+              value: dev|local
+            - name: DEV_ISSUER
+              value: dev
+            - name: TRUST_PROXY_HEADERS
+              value: "true"
+            - name: PUBLIC_BASE_URL
+              value: http://localhost:8080

@@ -192,3 +192,41 @@ func TestVerifier_Verify_JWKSRotation_OldKidRejected_NewKidAccepted(t *testing.T
 		t.Fatalf("sub mismatch: got %q", sub)
 	}
 }
+
+func TestVerifier_New_UsesDefaultClockAndHTTPClient(t *testing.T) {
+	t.Parallel()
+
+	jwksSrv, setKeys := jwks_testutil.NewRotatingJWKSServer()
+	defer jwksSrv.Close()
+
+	kp, err := jwks_testutil.GenerateRSAKeypair("kid-1")
+	if err != nil {
+		t.Fatalf("GenerateRSAKeypair: %v", err)
+	}
+	setKeys([]jwks_testutil.Keypair{kp})
+
+	cfg := config.JWTConfig{
+		Issuer:                 "test-iss",
+		Audience:               "test-aud",
+		JWKSURL:                jwksSrv.URL,
+		ClockSkew:              0,
+		JWKSRefreshInterval:    10 * time.Minute,
+		JWKSMinRefreshInterval: 0,
+		HTTPTimeout:            2 * time.Second,
+	}
+	v := jwtverifier.New(cfg)
+
+	now := time.Now()
+	jwt, err := jwks_testutil.MintRS256JWT(kp, cfg.Issuer, cfg.Audience, "member-123", now, 5*time.Minute, nil)
+	if err != nil {
+		t.Fatalf("MintRS256JWT: %v", err)
+	}
+
+	sub, err := v.Verify(context.Background(), jwt)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if sub != "member-123" {
+		t.Fatalf("sub mismatch: got %q", sub)
+	}
+}

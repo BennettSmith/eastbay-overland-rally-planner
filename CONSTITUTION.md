@@ -115,6 +115,15 @@ gh pr create --fill
 gh pr merge --auto --squash
 ```
 
+## 6.2 Deployment & infrastructure guardrails
+
+- **IaC-only**: All infrastructure changes MUST be made via Terraform in this repo.
+- **No long-lived AWS creds**: Use GitHub Actions OIDC with short-lived role assumption.
+- **Staging-first**: Apply to staging before prod; prod applies only via CI workflows.
+- **Secrets hygiene**: Never commit secrets; document variable names only and use managed secret stores.
+- **Migrations safety**: Run migrations as an explicit job before deploy; keep them idempotent and document rollback considerations.
+- **LocalStack rehearsal encouraged**: Prefer a local rehearsal path for infra changes when feasible (not a required gate).
+
 ## 7. Versioning & releases
 
 - Service versioning is independent of spec versioning.

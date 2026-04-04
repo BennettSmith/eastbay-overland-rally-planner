@@ -58,3 +58,57 @@ func TestRepo_GetUpsertCountYesList(t *testing.T) {
 		t.Fatalf("ListByTrip() order=%v, want [m1 m2]", []domain.MemberID{list[0].MemberID, list[1].MemberID})
 	}
 }
+
+func TestRepo_ListByMember_OrdersByTripIDThenUpdatedAt(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	r := NewRepo()
+
+	t1 := time.Unix(10, 0).UTC()
+	t2 := time.Unix(20, 0).UTC()
+	t3 := time.Unix(30, 0).UTC()
+
+	_ = r.Upsert(ctx, rsvprepo.RSVP{TripID: "t2", MemberID: "m1", Status: rsvprepo.StatusNo, UpdatedAt: t2})
+	_ = r.Upsert(ctx, rsvprepo.RSVP{TripID: "t1", MemberID: "m1", Status: rsvprepo.StatusYes, UpdatedAt: t3})
+	_ = r.Upsert(ctx, rsvprepo.RSVP{TripID: "t1", MemberID: "m1", Status: rsvprepo.StatusNo, UpdatedAt: t1}) // overwrite same key; updatedAt changes ordering
+	_ = r.Upsert(ctx, rsvprepo.RSVP{TripID: "t1", MemberID: "m2", Status: rsvprepo.StatusYes, UpdatedAt: t1})
+
+	list, err := r.ListByMember(ctx, "m1")
+	if err != nil {
+		t.Fatalf("ListByMember: %v", err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("len=%d want=2", len(list))
+	}
+	// TripID order first: t1 then t2.
+	if list[0].TripID != "t1" || list[1].TripID != "t2" {
+		t.Fatalf("order=%v", []domain.TripID{list[0].TripID, list[1].TripID})
+	}
+}
+
+func TestRepo_DeleteByMember_DeletesAllForMember(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	r := NewRepo()
+
+	_ = r.Upsert(ctx, rsvprepo.RSVP{TripID: "t1", MemberID: "m1", Status: rsvprepo.StatusYes, UpdatedAt: time.Unix(1, 0).UTC()})
+	_ = r.Upsert(ctx, rsvprepo.RSVP{TripID: "t2", MemberID: "m1", Status: rsvprepo.StatusNo, UpdatedAt: time.Unix(2, 0).UTC()})
+	_ = r.Upsert(ctx, rsvprepo.RSVP{TripID: "t1", MemberID: "m2", Status: rsvprepo.StatusYes, UpdatedAt: time.Unix(3, 0).UTC()})
+
+	if err := r.DeleteByMember(ctx, "m1"); err != nil {
+		t.Fatalf("DeleteByMember: %v", err)
+	}
+
+	if _, err := r.Get(ctx, "t1", "m1"); err != rsvprepo.ErrNotFound {
+		t.Fatalf("expected deleted: %v", err)
+	}
+	if _, err := r.Get(ctx, "t2", "m1"); err != rsvprepo.ErrNotFound {
+		t.Fatalf("expected deleted: %v", err)
+	}
+	// Other member remains.
+	if _, err := r.Get(ctx, "t1", "m2"); err != nil {
+		t.Fatalf("expected m2 record present: %v", err)
+	}
+}

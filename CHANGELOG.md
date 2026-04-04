@@ -17,6 +17,7 @@ Notes:
 
 - Updated keycloak config to add ebo-client to ebo realm.
 - Added self-service member deletion endpoint (`DELETE /members/me`) with idempotency support.
+- Added AWS deployment infrastructure (Terraform + OIDC workflows) with ECS migrations task support.
 
 ### Changed
 - Added cors support to caddy #17 (AP)

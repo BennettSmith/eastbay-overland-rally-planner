@@ -1,4 +1,14 @@
 services:
+  localstack:
+    image: localstack/localstack-pro:3.4.0
+    profiles: ["localstack"]
+    ports:
+      - "4566:4566"
+    environment:
+      LOCALSTACK_AUTH_TOKEN: ${LOCALSTACK_AUTH_TOKEN:-}
+      SERVICES: ecs,ecr,ec2,elbv2,iam,logs,secretsmanager,cloudwatch,sts
+    volumes:
+      - localstack-data:/var/lib/localstack
   devjwt:
     build:
       context: .
@@ -102,3 +112,4 @@ services:
 
 volumes:
   dbdata:
+  localstack-data:
